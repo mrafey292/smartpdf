@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+/* Accessibility-focused CSS Variables */
+:root {
+  /* Theme Colors */
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #2563eb;
+  --secondary: #64748b;
+  --accent: #8b5cf6;
+  --muted: #f1f5f9;
+  --border: #e2e8f0;
+  
+  /* Accessibility Settings */
+  --base-font-size: 18px;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  --line-height: 1.6;
+  --letter-spacing: 0px;
+  
+  /* Focus Styles */
+  --focus-ring: 2px solid #2563eb;
+  --focus-offset: 2px;
+  
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Dark Theme */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --primary: #3b82f6;
+    --secondary: #94a3b8;
+    --accent: #38bdf8;
+    --muted: #1e293b;
+    --border: #334155;
+  }
+}
+
+/* High Contrast Theme */
+[data-theme="high-contrast"] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --primary: #ffff00;
+  --secondary: #ffffff;
+  --accent: #00ffff;
+  --muted: #333333;
+  --border: #ffffff;
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #3b82f6;
+  --secondary: #94a3b8;
+  --accent: #a78bfa;
+  --muted: #1e293b;
+  --border: #334155;
+}
+
+/* Light Mode */
+[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #171717;
+  --primary: #2563eb;
+  --secondary: #64748b;
+  --accent: #8b5cf6;
+  --muted: #f1f5f9;
+  --border: #e2e8f0;
+}
+
+/* Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-family);
+  font-size: var(--base-font-size);
+  line-height: var(--line-height);
+  letter-spacing: var(--letter-spacing);
+}
+
+/* Screen Reader Only Content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Skip to Main Content Link */
+.skip-to-main {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--primary);
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-to-main:focus {
+  top: 0;
+}
+
+/* Focus Visible Styles */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Remove outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Button Reset */
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Link Styles */
+a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+/* Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dyslexia-Friendly Font Option */
+.font-dyslexia {
+  font-family: 'Comic Sans MS', 'OpenDyslexic', sans-serif;
+  letter-spacing: 0.12em;
+  word-spacing: 0.16em;
+}
