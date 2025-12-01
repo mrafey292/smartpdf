@@ -7,7 +7,6 @@ interface AccessibilitySettings {
   fontFamily: 'default' | 'dyslexic' | 'mono';
   lineHeight: number;
   letterSpacing: number;
-  theme: 'light' | 'dark' | 'high-contrast';
   colorOverlay: 'none' | 'yellow' | 'blue' | 'green';
   ttsEnabled: boolean;
   ttsSpeed: number;
@@ -165,60 +164,6 @@ export function AccessibilitySidebar({ isOpen, onClose, settings, onSettingsChan
               </div>
             </div>
 
-            {/* Theme */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label className="block text-sm font-medium text-foreground" style={{ marginBottom: '0.75rem' }}>
-                Theme Mode
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => updateSetting('theme', 'light')}
-                  className={`flex-1 rounded-lg border transition-all ${
-                    settings.theme === 'light' 
-                      ? 'border-accent shadow-lg' 
-                      : 'border-border hover:border-accent'
-                  }`}
-                  style={{ 
-                    padding: '0.875rem',
-                    backgroundColor: settings.theme === 'light' ? 'var(--accent)' : 'var(--muted)',
-                    color: settings.theme === 'light' ? 'white' : 'var(--foreground)'
-                  }}
-                >
-                  <div className="text-sm font-medium">Light</div>
-                </button>
-                <button
-                  onClick={() => updateSetting('theme', 'dark')}
-                  className={`flex-1 rounded-lg border transition-all ${
-                    settings.theme === 'dark' 
-                      ? 'border-accent shadow-lg' 
-                      : 'border-border hover:border-accent'
-                  }`}
-                  style={{ 
-                    padding: '0.875rem',
-                    backgroundColor: settings.theme === 'dark' ? 'var(--accent)' : 'var(--muted)',
-                    color: settings.theme === 'dark' ? 'white' : 'var(--foreground)'
-                  }}
-                >
-                  <div className="text-sm font-medium">Dark</div>
-                </button>
-                <button
-                  onClick={() => updateSetting('theme', 'high-contrast')}
-                  className={`flex-1 rounded-lg border transition-all ${
-                    settings.theme === 'high-contrast' 
-                      ? 'border-accent shadow-lg' 
-                      : 'border-border hover:border-accent'
-                  }`}
-                  style={{ 
-                    padding: '0.875rem',
-                    backgroundColor: settings.theme === 'high-contrast' ? 'var(--accent)' : 'var(--muted)',
-                    color: settings.theme === 'high-contrast' ? 'white' : 'var(--foreground)'
-                  }}
-                >
-                  <div className="text-sm font-medium">High</div>
-                </button>
-              </div>
-            </div>
-
             {/* Color Overlay */}
             <div style={{ marginBottom: '1.5rem' }}>
               <label className="block text-sm font-medium text-foreground" style={{ marginBottom: '0.75rem' }}>
@@ -319,7 +264,6 @@ export function AccessibilitySidebar({ isOpen, onClose, settings, onSettingsChan
                 updateSetting('fontFamily', 'default');
                 updateSetting('lineHeight', 1.6);
                 updateSetting('letterSpacing', 0);
-                updateSetting('theme', 'light');
                 updateSetting('colorOverlay', 'none');
                 updateSetting('ttsEnabled', false);
                 updateSetting('ttsSpeed', 1);

@@ -62,13 +62,57 @@ export interface AIQuestion {
   createdAt: Date;
 }
 
+// Chat Types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: number;
+}
+
+export interface ChatSession {
+  id: string;
+  documentId: string;
+  messages: ChatMessage[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// API Response Types
+export interface ChatResponse {
+  success: boolean;
+  answer?: string;
+  timestamp: number;
+  error?: string;
+  details?: string;
+}
+
+export interface SummaryResponse {
+  success: boolean;
+  summary?: string;
+  summaryType: 'brief' | 'detailed' | 'key-points';
+  simplified: boolean;
+  readingLevel?: 'elementary' | 'middle-school' | 'high-school';
+  timestamp: number;
+  error?: string;
+  details?: string;
+}
+
+export interface AnalysisResponse {
+  success: boolean;
+  analysisType: 'key-concepts' | 'study-questions';
+  result?: string;
+  timestamp: number;
+  error?: string;
+  details?: string;
+}
+
 // Accessibility Settings
 export interface AccessibilitySettings {
   fontSize: number;
   fontFamily: 'default' | 'dyslexia-friendly' | 'sans-serif' | 'serif';
   lineHeight: number;
   letterSpacing: number;
-  theme: 'light' | 'dark' | 'high-contrast';
   colorOverlay?: string;
   ttsEnabled: boolean;
   ttsRate: number;

@@ -28,15 +28,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Skip to main content link for keyboard navigation */}
-        <a href="#main-content" className="skip-to-main">
-          Skip to main content
-        </a>
-        
-        {/* Main landmark for screen readers */}
-        <div id="main-content" role="main">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   );

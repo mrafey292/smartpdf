@@ -16,8 +16,8 @@ export function Navbar() {
         </div>
         
         <div className="flex items-center gap-6">
-            <a href="#" className="hidden sm:block font-medium transition-colors px-3 py-2 rounded-lg hover:bg-muted" style={{ textDecoration: 'none', color: 'var(--accent)', fontSize: '1rem' }}>Home</a>
-            <a href="#" className="hidden sm:block font-medium transition-colors px-3 py-2 rounded-lg hover:bg-muted" style={{ textDecoration: 'none', color: 'var(--accent)', fontSize: '1rem' }}>Library</a>
+            <a href="/" className="hidden sm:block font-medium transition-colors px-3 py-2 rounded-lg hover:bg-muted" style={{ textDecoration: 'none', color: 'var(--accent)', fontSize: '1rem' }}>Home</a>
+            <a href="/" className="hidden sm:block font-medium transition-colors px-3 py-2 rounded-lg hover:bg-muted" style={{ textDecoration: 'none', color: 'var(--accent)', fontSize: '1rem' }}>Library</a>
             <div className="hidden sm:block h-4 w-px bg-border"></div>
             <ThemeToggle />
         </div>
