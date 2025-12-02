@@ -7,6 +7,7 @@ interface AccessibilitySettings {
   fontFamily: 'default' | 'dyslexic' | 'mono';
   lineHeight: number;
   letterSpacing: number;
+  theme: 'light' | 'dark' | 'high-contrast';
   colorOverlay: 'none' | 'yellow' | 'blue' | 'green';
   ttsEnabled: boolean;
   ttsSpeed: number;

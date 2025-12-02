@@ -113,6 +113,7 @@ export interface AccessibilitySettings {
   fontFamily: 'default' | 'dyslexia-friendly' | 'sans-serif' | 'serif';
   lineHeight: number;
   letterSpacing: number;
+  theme?: 'light' | 'dark' | 'high-contrast';
   colorOverlay?: string;
   ttsEnabled: boolean;
   ttsRate: number;

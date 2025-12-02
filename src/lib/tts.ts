@@ -150,9 +150,9 @@ export class TextToSpeechService {
           hasStarted: hasStarted
         });
         
-        // If it failed before starting, it's likely a browser issue
+        // If it failed before starting, it's likely a browser/system issue
         if (!hasStarted) {
-          const errorMsg = 'Text-to-speech is not working. This feature may not be supported in your browser or system.\n\nPlease try:\n1. Using Chrome, Edge, or Safari\n2. Checking if your system has text-to-speech voices installed\n3. Testing on a different device';
+          const errorMsg = 'Text-to-speech is not available.\n\nThis feature requires:\n• Windows, macOS, Chrome OS, Android, or iOS\n• Chrome, Edge, or Safari browser\n\nLinux systems have limited browser TTS support.\nPlease try on a different device or operating system.';
           options?.onError?.(new Error(errorMsg));
         } else {
           // Failed during playback

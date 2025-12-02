@@ -1,20 +1,28 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Gemini AI
-const apiKey = process.env.GEMINI_API_KEY;
+// Lazy initialization to avoid build-time errors
+let genAI: GoogleGenerativeAI | null = null;
 
-if (!apiKey) {
-  throw new Error('GEMINI_API_KEY is not set in environment variables');
+function getGenAI() {
+  if (!genAI) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY is not set in environment variables');
+    }
+    
+    genAI = new GoogleGenerativeAI(apiKey);
+  }
+  
+  return genAI;
 }
-
-const genAI = new GoogleGenerativeAI(apiKey);
 
 /**
  * Get Gemini model for text generation
  * Using gemini-2.5-flash-lite for fast responses, good for chat
  */
 export function getGeminiModel(modelName: string = 'gemini-2.5-flash-lite') {
-  return genAI.getGenerativeModel({ model: modelName });
+  return getGenAI().getGenerativeModel({ model: modelName });
 }
 
 /**
@@ -22,7 +30,7 @@ export function getGeminiModel(modelName: string = 'gemini-2.5-flash-lite') {
  * Using gemini-2.5-flash-lite for better quality responses
  */
 export function getGeminiProModel() {
-  return genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+  return getGenAI().getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 }
 
 /**

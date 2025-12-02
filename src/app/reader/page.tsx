@@ -2,18 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Navbar } from '@/components/ui/Navbar';
-import { PDFViewer } from '@/components/pdf/PDFViewer';
 import { TextReader } from '@/components/reader/TextReader';
 import { AccessibilitySidebar } from '@/components/reader/AccessibilitySidebar';
 import { ChatPanel } from '@/components/reader/ChatPanel';
 import { SummaryPanel } from '@/components/reader/SummaryPanel';
+
+// Dynamically import PDFViewer to avoid SSR issues with react-pdf
+const PDFViewer = dynamic(() => import('@/components/pdf/PDFViewer').then(mod => ({ default: mod.PDFViewer })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full">Loading PDF viewer...</div>
+});
 
 interface AccessibilitySettings {
   fontSize: number;
   fontFamily: 'default' | 'dyslexic' | 'mono';
   lineHeight: number;
   letterSpacing: number;
+  theme: 'light' | 'dark' | 'high-contrast';
   colorOverlay: 'none' | 'yellow' | 'blue' | 'green';
   ttsEnabled: boolean;
   ttsSpeed: number;
@@ -25,6 +32,7 @@ const defaultSettings: AccessibilitySettings = {
   fontFamily: 'default',
   lineHeight: 1.6,
   letterSpacing: 0,
+  theme: 'light',
   colorOverlay: 'none',
   ttsEnabled: false,
   ttsSpeed: 1,
