@@ -11,6 +11,55 @@ interface SummaryPanelProps {
 
 // Component to format and render AI response with proper markdown-like formatting
 function FormattedContent({ content }: { content: string }) {
+  // Function to parse inline formatting (bold and italic text)
+  const parseInlineFormatting = (text: string): ReactNode[] => {
+    const parts: ReactNode[] = [];
+    let currentText = text;
+    let partKey = 0;
+
+    // Combined regex to match both **bold** and *italic*
+    const formattingRegex = /(\*\*.*?\*\*|\*.*?\*)/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = formattingRegex.exec(currentText)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push(currentText.substring(lastIndex, match.index));
+      }
+      
+      const matchedText = match[0];
+      
+      // Check if it's bold (**text**)
+      if (matchedText.startsWith('**') && matchedText.endsWith('**')) {
+        const boldText = matchedText.slice(2, -2);
+        parts.push(
+          <strong key={`bold-${partKey++}`} className="font-semibold">
+            {boldText}
+          </strong>
+        );
+      }
+      // Check if it's italic (*text*) - but not part of **
+      else if (matchedText.startsWith('*') && matchedText.endsWith('*') && !matchedText.startsWith('**')) {
+        const italicText = matchedText.slice(1, -1);
+        parts.push(
+          <em key={`italic-${partKey++}`} className="italic">
+            {italicText}
+          </em>
+        );
+      }
+      
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < currentText.length) {
+      parts.push(currentText.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : [text];
+  };
+
   // Split content into paragraphs and format lists
   const formatContent = (text: string) => {
     const lines = text.split('\n');
@@ -25,7 +74,7 @@ function FormattedContent({ content }: { content: string }) {
           <ul key={`list-${key++}`} className="space-y-2 mb-4" style={{ paddingLeft: '1.5rem' }}>
             {listItems.map((item, idx) => (
               <li key={idx} className="text-sm text-foreground" style={{ listStyleType: 'disc' }}>
-                {item}
+                {parseInlineFormatting(item)}
               </li>
             ))}
           </ul>
@@ -45,12 +94,23 @@ function FormattedContent({ content }: { content: string }) {
       }
 
       // Check for headers (lines ending with : or starting with ##)
-      if (trimmedLine.endsWith(':') || trimmedLine.startsWith('##')) {
+      if (trimmedLine.endsWith(':') && !trimmedLine.includes('**')) {
         flushList();
         const headerText = trimmedLine.replace(/^##\s*/, '').replace(/:$/, '');
         elements.push(
           <h4 key={`header-${key++}`} className="font-semibold text-foreground mb-2 mt-3" style={{ fontSize: '0.95rem' }}>
-            {headerText}
+            {parseInlineFormatting(headerText)}
+          </h4>
+        );
+        return;
+      }
+
+      if (trimmedLine.startsWith('##')) {
+        flushList();
+        const headerText = trimmedLine.replace(/^##\s*/, '');
+        elements.push(
+          <h4 key={`header-${key++}`} className="font-semibold text-foreground mb-2 mt-3" style={{ fontSize: '0.95rem' }}>
+            {parseInlineFormatting(headerText)}
           </h4>
         );
         return;
@@ -79,21 +139,11 @@ function FormattedContent({ content }: { content: string }) {
 
       // Regular paragraph
       flushList();
-      if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
-        // Bold text
-        const text = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '');
-        elements.push(
-          <p key={`bold-${key++}`} className="font-semibold text-foreground mb-2">
-            {text}
-          </p>
-        );
-      } else {
-        elements.push(
-          <p key={`para-${key++}`} className="text-sm text-foreground mb-3 leading-relaxed">
-            {trimmedLine}
-          </p>
-        );
-      }
+      elements.push(
+        <p key={`para-${key++}`} className="text-sm text-foreground mb-3 leading-relaxed">
+          {parseInlineFormatting(trimmedLine)}
+        </p>
+      );
     });
 
     flushList(); // Flush any remaining list items
@@ -103,6 +153,18 @@ function FormattedContent({ content }: { content: string }) {
   return <div className="formatted-content">{formatContent(content)}</div>;
 }
 
+interface SummaryResult {
+  type: 'brief' | 'detailed' | 'key-points';
+  content: string;
+  timestamp: number;
+}
+
+interface AnalysisResult {
+  type: 'key-concepts' | 'study-questions';
+  content: string;
+  timestamp: number;
+}
+
 interface SummaryPanelProps {
   documentText: string;
   isOpen: boolean;
@@ -110,8 +172,8 @@ interface SummaryPanelProps {
 }
 
 export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProps) {
-  const [summary, setSummary] = useState<string>('');
-  const [analysis, setAnalysis] = useState<string>('');
+  const [summaries, setSummaries] = useState<SummaryResult[]>([]);
+  const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'summary' | 'analysis'>('summary');
   const [summaryType, setSummaryType] = useState<'brief' | 'detailed' | 'key-points'>('brief');
@@ -133,13 +195,23 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
       const data: SummaryResponse = await response.json();
 
       if (data.success && data.summary) {
-        setSummary(data.summary);
+        const newSummary: SummaryResult = {
+          type: summaryType,
+          content: data.summary,
+          timestamp: Date.now()
+        };
+        setSummaries(prev => [newSummary, ...prev]);
       } else {
         throw new Error(data.error || 'Failed to generate summary');
       }
     } catch (error) {
       console.error('Summary error:', error);
-      setSummary('Failed to generate summary. Please try again.');
+      const errorSummary: SummaryResult = {
+        type: summaryType,
+        content: 'Failed to generate summary. Please try again.',
+        timestamp: Date.now()
+      };
+      setSummaries(prev => [errorSummary, ...prev]);
     } finally {
       setLoading(false);
     }
@@ -161,13 +233,23 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
       const data: AnalysisResponse = await response.json();
 
       if (data.success && data.result) {
-        setAnalysis(data.result);
+        const newAnalysis: AnalysisResult = {
+          type: analysisType,
+          content: data.result,
+          timestamp: Date.now()
+        };
+        setAnalyses(prev => [newAnalysis, ...prev]);
       } else {
         throw new Error(data.error || 'Failed to analyze document');
       }
     } catch (error) {
       console.error('Analysis error:', error);
-      setAnalysis('Failed to analyze document. Please try again.');
+      const errorAnalysis: AnalysisResult = {
+        type: analysisType,
+        content: 'Failed to analyze document. Please try again.',
+        timestamp: Date.now()
+      };
+      setAnalyses(prev => [errorAnalysis, ...prev]);
     } finally {
       setLoading(false);
     }
@@ -264,8 +346,10 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
               <button
                 onClick={generateSummary}
                 disabled={loading}
-                className="w-full rounded-lg px-4 py-3 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+                className="w-full rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1.5rem',
                   backgroundColor: 'var(--accent)',
                   color: 'white'
                 }}
@@ -274,26 +358,39 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
               </button>
 
               {/* Summary Content */}
-              {summary && (
-                <div className="rounded-xl border border-border shadow-sm" style={{ backgroundColor: 'var(--background)' }}>
-                  <div className="border-b border-border px-4 py-3" style={{ backgroundColor: 'var(--muted)' }}>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <h3 className="text-sm font-semibold text-foreground">
-                        {summaryType === 'brief' ? 'Brief Summary' : summaryType === 'detailed' ? 'Detailed Summary' : 'Key Points'}
-                      </h3>
+              <div className="space-y-4">
+                {summaries.map((summary, idx) => (
+                  <div key={summary.timestamp} className="rounded-xl border border-border shadow-sm" style={{ backgroundColor: 'var(--background)' }}>
+                    <div className="border-b border-border" style={{ padding: '0.75rem 1rem', backgroundColor: 'var(--muted)' }}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            {summary.type === 'brief' ? 'Brief Summary' : summary.type === 'detailed' ? 'Detailed Summary' : 'Key Points'}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => setSummaries(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 rounded hover:bg-background/50 transition-colors"
+                          aria-label="Remove summary"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ padding: '1rem 1.25rem' }}>
+                      <FormattedContent content={summary.content} />
                     </div>
                   </div>
-                  <div className="p-4">
-                    <FormattedContent content={summary} />
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
 
               {loading && (
-                <div className="rounded-xl border border-border p-8" style={{ backgroundColor: 'var(--muted)' }}>
+                <div className="rounded-xl border border-border" style={{ padding: '2rem 1.5rem', backgroundColor: 'var(--muted)' }}>
                   <div className="flex flex-col items-center gap-3">
                     <div className="flex gap-1">
                       <div className="w-3 h-3 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent)', animationDelay: '0ms' }}></div>
@@ -305,7 +402,7 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
                 </div>
               )}
 
-              {!summary && !loading && (
+              {summaries.length === 0 && !loading && (
                 <div className="rounded-xl border-2 border-dashed border-border p-8 text-center" style={{ backgroundColor: 'var(--muted)', opacity: 0.7 }}>
                   <svg className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -336,8 +433,10 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
               <button
                 onClick={generateAnalysis}
                 disabled={loading}
-                className="w-full rounded-lg px-4 py-3 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+                className="w-full rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1.5rem',
                   backgroundColor: 'var(--accent)',
                   color: 'white'
                 }}
@@ -346,26 +445,39 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
               </button>
 
               {/* Analysis Content */}
-              {analysis && (
-                <div className="rounded-xl border border-border shadow-sm" style={{ backgroundColor: 'var(--background)' }}>
-                  <div className="border-b border-border px-4 py-3" style={{ backgroundColor: 'var(--muted)' }}>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                      <h3 className="text-sm font-semibold text-foreground">
-                        {analysisType === 'key-concepts' ? 'Key Concepts' : 'Study Questions'}
-                      </h3>
+              <div className="space-y-4">
+                {analyses.map((analysis, idx) => (
+                  <div key={analysis.timestamp} className="rounded-xl border border-border shadow-sm" style={{ backgroundColor: 'var(--background)' }}>
+                    <div className="border-b border-border" style={{ padding: '0.75rem 1rem', backgroundColor: 'var(--muted)' }}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                          </svg>
+                          <h3 className="text-sm font-semibold text-foreground">
+                            {analysis.type === 'key-concepts' ? 'Key Concepts' : 'Study Questions'}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => setAnalyses(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 rounded hover:bg-background/50 transition-colors"
+                          aria-label="Remove analysis"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ padding: '1rem 1.25rem' }}>
+                      <FormattedContent content={analysis.content} />
                     </div>
                   </div>
-                  <div className="p-4">
-                    <FormattedContent content={analysis} />
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
 
               {loading && (
-                <div className="rounded-xl border border-border p-8" style={{ backgroundColor: 'var(--muted)' }}>
+                <div className="rounded-xl border border-border" style={{ padding: '2rem 1.5rem', backgroundColor: 'var(--muted)' }}>
                   <div className="flex flex-col items-center gap-3">
                     <div className="flex gap-1">
                       <div className="w-3 h-3 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent)', animationDelay: '0ms' }}></div>
@@ -377,7 +489,7 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
                 </div>
               )}
 
-              {!analysis && !loading && (
+              {analyses.length === 0 && !loading && (
                 <div className="rounded-xl border-2 border-dashed border-border p-8 text-center" style={{ backgroundColor: 'var(--muted)', opacity: 0.7 }}>
                   <svg className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />

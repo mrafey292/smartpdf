@@ -121,6 +121,25 @@ export default function ReaderPage() {
     setSettings(newSettings);
     localStorage.setItem('accessibilitySettings', JSON.stringify(newSettings));
   };
+
+  // Keyboard shortcut for switching view mode
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'v') {
+        e.preventDefault();
+        setViewMode(prev => prev === 'text' ? 'pdf' : 'text');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
       {!settings.readerMode && <Navbar />}
@@ -221,12 +240,12 @@ export default function ReaderPage() {
           <TextReader 
             file={file}
             settings={settings}
-            onOpenAccessibility={() => setIsSidebarOpen(true)}
+            onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
           />
         ) : (
           <PDFViewer 
             file={file} 
-            onOpenAccessibility={() => setIsSidebarOpen(true)}
+            onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
             accessibilitySettings={settings}
           />
         )}

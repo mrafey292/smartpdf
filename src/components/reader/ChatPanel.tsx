@@ -6,6 +6,18 @@ import { ChatMessage, ChatResponse } from '@/types';
 
 // Component to format AI responses with better typography
 function FormattedMessage({ text }: { text: string }) {
+  const parseInlineFormatting = (content: string): ReactNode[] => {
+    const parts = content.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index}>{part.slice(2, -2)}</strong>;
+      } else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
+        return <em key={index}>{part.slice(1, -1)}</em>;
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   const formatText = (content: string) => {
     const lines = content.split('\n');
     const elements: ReactNode[] = [];
@@ -20,7 +32,7 @@ function FormattedMessage({ text }: { text: string }) {
             {listItems.map((item, idx) => (
               <li key={idx} className="text-sm leading-relaxed flex gap-2">
                 <span style={{ color: 'var(--accent)', marginTop: '0.15rem' }}>•</span>
-                <span className="flex-1">{item}</span>
+                <span className="flex-1">{parseInlineFormatting(item)}</span>
               </li>
             ))}
           </ul>
@@ -44,7 +56,7 @@ function FormattedMessage({ text }: { text: string }) {
         const headerText = trimmed.replace(/^##\s*/, '').replace(/:$/, '');
         elements.push(
           <h4 key={`header-${key++}`} className="font-semibold text-sm mt-3 mb-1.5">
-            {headerText}
+            {parseInlineFormatting(headerText)}
           </h4>
         );
         return;
@@ -72,7 +84,7 @@ function FormattedMessage({ text }: { text: string }) {
         const text = trimmed.replace(/^\*\*/, '').replace(/\*\*/, '');
         elements.push(
           <p key={`bold-${key++}`} className="font-semibold text-sm my-2">
-            {text}
+            {parseInlineFormatting(text)}
           </p>
         );
         return;
@@ -82,7 +94,7 @@ function FormattedMessage({ text }: { text: string }) {
       flushList();
       elements.push(
         <p key={`para-${key++}`} className="text-sm leading-relaxed mb-2">
-          {trimmed}
+          {parseInlineFormatting(trimmed)}
         </p>
       );
     });
@@ -236,7 +248,7 @@ export function ChatPanel({ documentText, isOpen, onClose }: ChatPanelProps) {
               <p className="text-sm text-muted-foreground max-w-xs">Ask me anything about this document and I'll help you understand it better!</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -269,7 +281,7 @@ export function ChatPanel({ documentText, isOpen, onClose }: ChatPanelProps) {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl px-5 py-4 border border-border shadow-sm" style={{ backgroundColor: 'var(--background)' }}>
+                  <div className="rounded-2xl px-5 py-4 shadow-sm" style={{ backgroundColor: 'var(--background)' }}>
                     <div className="flex gap-1.5 items-center">
                       <div className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent)', animationDelay: '0ms' }}></div>
                       <div className="w-2.5 h-2.5 rounded-full animate-bounce" style={{ backgroundColor: 'var(--accent)', animationDelay: '150ms' }}></div>
@@ -312,7 +324,7 @@ export function ChatPanel({ documentText, isOpen, onClose }: ChatPanelProps) {
               </svg>
             </button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2 px-1">
+          <p className="text-xs text-muted-foreground" style={{ marginTop: '0.625rem', paddingLeft: '0.25rem', paddingRight: '0.25rem' }}>
             Press Enter to send • AI responses may take a few seconds
           </p>
         </div>
