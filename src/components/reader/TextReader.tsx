@@ -48,8 +48,9 @@ interface TextReaderProps {
 }
 
 export function TextReader({ file, settings, onOpenAccessibility }: TextReaderProps) {
-  const [pages, setPages] = useState<StructuredContent[][]>([]);
-  const [currentPage, setCurrentPage] = useState<number>(0);
+  const [allContent, setAllContent] = useState<StructuredContent[]>([]);
+  const [pageBreaks, setPageBreaks] = useState<number[]>([]); // Indices where pages start
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
@@ -81,20 +82,20 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
         case 'ArrowLeft':
         case 'h':
           e.preventDefault();
-          setCurrentPage(prev => Math.max(0, prev - 1));
+          goToPrevPage();
           break;
         case 'ArrowRight':
         case 'l':
           e.preventDefault();
-          setCurrentPage(prev => Math.min(pages.length - 1, prev + 1));
+          goToNextPage();
           break;
         case 'Home':
           e.preventDefault();
-          setCurrentPage(0);
+          scrollToPage(1);
           break;
         case 'End':
           e.preventDefault();
-          setCurrentPage(pages.length - 1);
+          scrollToPage(pageBreaks.length);
           break;
         case ' ':
           e.preventDefault();
@@ -121,39 +122,112 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [pages.length, settings.ttsEnabled, currentPage, isPlaying, isPaused]);
+  }, [settings.ttsEnabled, isPlaying, isPaused, pageBreaks.length, currentPage]);
 
   useEffect(() => {
-    if (!file || !pdfjs) return;
+    if (!file) return;
 
     const extractStructuredText = async () => {
       setLoading(true);
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
-        const allPages: StructuredContent[][] = [];
+        // Handle different file types
+        if (file.type === 'application/pdf') {
+          // Wait for pdfjs to load
+          if (!pdfjs) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            if (!pdfjs) {
+              throw new Error('PDF.js not loaded');
+            }
+          }
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+          const allStructured: StructuredContent[] = [];
+          const breaks: number[] = [0]; // First page starts at index 0
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            
+            // Add page separator if not first page
+            if (i > 1) {
+              allStructured.push({
+                type: 'paragraph',
+                content: '───────────────────',
+              });
+              breaks.push(allStructured.length); // Track where this page starts
+            }
+            
+            // Group text items by their properties
+            const blocks: TextBlock[] = textContent.items.map((item: any) => ({
+              text: item.str,
+              fontSize: item.transform[0],
+              fontName: item.fontName,
+              x: item.transform[4],
+              y: item.transform[5],
+              width: item.width,
+              height: item.height,
+            }));
+
+            // Analyze and structure the content
+            const structured = analyzeStructure(blocks);
+            allStructured.push(...structured);
+          }
+
+          setAllContent(allStructured);
+          setPageBreaks(breaks);
+        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          // Handle DOCX files
+          const mammoth = await import('mammoth');
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.convertToHtml({ arrayBuffer });
           
-          // Group text items by their properties
-          const blocks: TextBlock[] = textContent.items.map((item: any) => ({
-            text: item.str,
-            fontSize: item.transform[0],
-            fontName: item.fontName,
-            x: item.transform[4],
-            y: item.transform[5],
-            width: item.width,
-            height: item.height,
-          }));
-
-          // Analyze and structure the content
-          const structured = analyzeStructure(blocks);
-          allPages.push(structured);
+          // Convert HTML to structured content
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = result.value;
+          
+          const structured: StructuredContent[] = [];
+          tempDiv.childNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as HTMLElement;
+              const text = element.textContent || '';
+              
+              if (text.trim()) {
+                if (element.tagName.match(/^H[1-6]$/)) {
+                  const level = parseInt(element.tagName.charAt(1));
+                  structured.push({
+                    type: 'heading',
+                    content: text,
+                    level,
+                  });
+                } else {
+                  structured.push({
+                    type: 'paragraph',
+                    content: text,
+                  });
+                }
+              }
+            }
+          });
+          
+          setAllContent(structured);
+          setPageBreaks([0]); // Single page for DOCX
+        } else if (file.type === 'text/plain') {
+          // Handle TXT files
+          const text = await file.text();
+          const paragraphs = text.split(/\n\n+/);
+          
+          const structured: StructuredContent[] = paragraphs
+            .filter(p => p.trim())
+            .map(paragraph => ({
+              type: 'paragraph' as const,
+              content: paragraph.trim(),
+            }));
+          
+          setAllContent(structured);
+          setPageBreaks([0]); // Single page for TXT
         }
 
-        setPages(allPages);
         setLoading(false);
       } catch (error) {
         console.error('Error extracting text:', error);
@@ -173,17 +247,28 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
     }
   }, [settings.ttsEnabled]);
 
-  // Stop TTS when changing pages
-  useEffect(() => {
-    if (ttsServiceRef.current && isPlaying) {
-      ttsServiceRef.current.stop();
-      setIsPlaying(false);
-      setIsPaused(false);
-    }
-  }, [currentPage]);
+  const getAllText = (): string => {
+    return allContent.map(item => item.content).join('\n\n');
+  };
 
-  const getPageText = (pageContent: StructuredContent[]): string => {
-    return pageContent.map(item => item.content).join('\n\n');
+  const scrollToPage = (pageNum: number) => {
+    const pageElement = document.getElementById(`text-page-${pageNum}`);
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setCurrentPage(pageNum);
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      scrollToPage(currentPage - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < pageBreaks.length) {
+      scrollToPage(currentPage + 1);
+    }
   };
 
   const handlePlayPause = async () => {
@@ -205,11 +290,11 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
       }
 
       // Start playing
-      const pageText = getPageText(pages[currentPage] || []);
-      console.log('Text to read (first 200 chars):', pageText.substring(0, 200));
-      console.log('Total text length:', pageText.length);
+      const documentText = getAllText();
+      console.log('Text to read (first 200 chars):', documentText.substring(0, 200));
+      console.log('Total text length:', documentText.length);
       
-      if (!pageText || pageText.trim().length === 0) {
+      if (!documentText || documentText.trim().length === 0) {
         alert('No text available to read on this page.');
         return;
       }
@@ -218,7 +303,7 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
       setIsPaused(false);
       
       try {
-        await ttsServiceRef.current.speak(pageText, {
+        await ttsServiceRef.current.speak(documentText, {
           rate: settings.ttsSpeed,
           onEnd: () => {
             console.log('Reading completed');
@@ -343,7 +428,19 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
     }
   };
 
+  const getPageNumber = (index: number): number => {
+    for (let i = pageBreaks.length - 1; i >= 0; i--) {
+      if (index >= pageBreaks[i]) {
+        return i + 1;
+      }
+    }
+    return 1;
+  };
+
   const renderContent = (item: StructuredContent, index: number) => {
+    const pageNum = getPageNumber(index);
+    const isPageStart = pageBreaks.includes(index);
+    
     const baseStyle: React.CSSProperties = {
       fontFamily: getFontFamily(),
       lineHeight: settings.lineHeight,
@@ -364,30 +461,28 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
         marginBottom: '1rem',
       };
 
-      switch (level) {
-        case 1:
-          return <h1 key={index} style={headingStyle}>{item.content}</h1>;
-        case 2:
-          return <h2 key={index} style={headingStyle}>{item.content}</h2>;
-        case 3:
-          return <h3 key={index} style={headingStyle}>{item.content}</h3>;
-        default:
-          return <h4 key={index} style={headingStyle}>{item.content}</h4>;
-      }
+      const HeadingTag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4';
+      
+      return (
+        <div key={index} id={isPageStart ? `text-page-${pageNum}` : undefined} className={isPageStart ? 'scroll-mt-4' : ''}>
+          <HeadingTag style={headingStyle}>{item.content}</HeadingTag>
+        </div>
+      );
     }
 
     return (
-      <p
-        key={index}
-        style={{
-          ...baseStyle,
-          fontSize: `${settings.fontSize}px`,
-          textAlign: 'justify',
-          marginBottom: '1.5rem',
-        }}
-      >
-        {item.content}
-      </p>
+      <div key={index} id={isPageStart ? `text-page-${pageNum}` : undefined} className={isPageStart ? 'scroll-mt-4' : ''}>
+        <p
+          style={{
+            ...baseStyle,
+            fontSize: `${settings.fontSize}px`,
+            textAlign: 'justify',
+            marginBottom: '1.5rem',
+          }}
+        >
+          {item.content}
+        </p>
+      </div>
     );
   };
 
@@ -409,8 +504,6 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
       </div>
     );
   }
-
-  const currentPageContent = pages[currentPage] || [];
 
   if (!file) {
     return (
@@ -468,35 +561,37 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
             <div style={{ padding: '1.5rem' }}>
               <div className="space-y-4">
                 {/* Navigation */}
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">Navigation</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground">Previous page</span>
-                      <div className="flex gap-2">
-                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>←</kbd>
-                        <span className="text-xs text-muted-foreground">or</span>
-                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>H</kbd>
+                {pageBreaks.length > 1 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Navigation</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-foreground">Previous page</span>
+                        <div className="flex gap-2">
+                          <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>←</kbd>
+                          <span className="text-xs text-muted-foreground">or</span>
+                          <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>H</kbd>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground">Next page</span>
-                      <div className="flex gap-2">
-                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>→</kbd>
-                        <span className="text-xs text-muted-foreground">or</span>
-                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>L</kbd>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-foreground">Next page</span>
+                        <div className="flex gap-2">
+                          <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>→</kbd>
+                          <span className="text-xs text-muted-foreground">or</span>
+                          <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>L</kbd>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground">First page</span>
-                      <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>Home</kbd>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground">Last page</span>
-                      <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>End</kbd>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-foreground">First page</span>
+                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>Home</kbd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-foreground">Last page</span>
+                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>End</kbd>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Text-to-Speech */}
                 {settings.ttsEnabled && (
@@ -539,29 +634,42 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
         </>
       )}
 
-      {/* Navigation */}
+      {/* Toolbar */}
       <div className="border-b border-border" style={{ padding: '1rem 3rem', backgroundColor: 'var(--muted)/30' }}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-              disabled={currentPage === 0}
-              className="rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 1.5rem' }}
-            >
-              ←
-            </button>
-            <span className="text-sm font-medium text-foreground">
-              Page {currentPage + 1} of {pages.length}
-            </span>
-            <button
-              onClick={() => setCurrentPage(Math.min(pages.length - 1, currentPage + 1))}
-              disabled={currentPage === pages.length - 1}
-              className="rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 1.5rem' }}
-            >
-              →
-            </button>
+          <div className="flex items-center gap-4">
+            {/* Page Navigation - Only show for PDFs with multiple pages */}
+            {pageBreaks.length > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goToPrevPage}
+                  disabled={currentPage <= 1}
+                  className="rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 1.5rem' }}
+                  aria-label="Previous page"
+                >
+                  ←
+                </button>
+                <span className="text-sm font-medium text-foreground">
+                  Page {currentPage} of {pageBreaks.length}
+                </span>
+                <button
+                  onClick={goToNextPage}
+                  disabled={currentPage >= pageBreaks.length}
+                  className="rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 1.5rem' }}
+                  aria-label="Next page"
+                >
+                  →
+                </button>
+              </div>
+            )}
+
+            {pageBreaks.length === 1 && (
+              <div className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
+                ✓ Accessible Text Mode
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-4">
@@ -622,10 +730,6 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
               </div>
             )}
             
-            <div className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
-              ✓ Accessible Text Mode
-            </div>
-            
             {/* Accessibility Button */}
             <button
               onClick={onOpenAccessibility}
@@ -673,7 +777,7 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
             padding: '3rem 2rem',
           }}
         >
-          {currentPageContent.map((item, index) => renderContent(item, index))}
+          {allContent.map((item, index) => renderContent(item, index))}
         </div>
       </div>
     </div>

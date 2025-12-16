@@ -8,11 +8,18 @@ import { TextReader } from '@/components/reader/TextReader';
 import { AccessibilitySidebar } from '@/components/reader/AccessibilitySidebar';
 import { ChatPanel } from '@/components/reader/ChatPanel';
 import { SummaryPanel } from '@/components/reader/SummaryPanel';
+import { getCurrentDocument } from '@/lib/storage';
 
 // Dynamically import PDFViewer to avoid SSR issues with react-pdf
 const PDFViewer = dynamic(() => import('@/components/pdf/PDFViewer').then(mod => ({ default: mod.PDFViewer })), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-full">Loading PDF viewer...</div>
+});
+
+// Dynamically import DocxViewer
+const DocxViewer = dynamic(() => import('@/components/reader/DocxViewer').then(mod => ({ default: mod.DocxViewer })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full">Loading DOCX viewer...</div>
 });
 
 interface AccessibilitySettings {
@@ -46,7 +53,7 @@ export default function ReaderPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [settings, setSettings] = useState<AccessibilitySettings>(defaultSettings);
-  const [viewMode, setViewMode] = useState<'pdf' | 'text'>('text'); // Default to text mode for accessibility
+  const [viewMode, setViewMode] = useState<'pdf' | 'docx' | 'text'>('text'); // Default to text mode for accessibility
   const [isDarkMode, setIsDarkMode] = useState(false);
   const router = useRouter();
 
@@ -79,29 +86,79 @@ export default function ReaderPage() {
     }
   };
 
-  useEffect(() => {
-    // Get file from localStorage (temporary solution)
-    const storedFileName = localStorage.getItem('currentFileName');
-    const storedFileData = localStorage.getItem('currentFileData');
-    
-    if (storedFileName && storedFileData) {
-      // Reconstruct the file from base64
-      const byteString = atob(storedFileData);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-      }
-      const blob = new Blob([ab], { type: 'application/pdf' });
-      const reconstructedFile = new File([blob], storedFileName, { type: 'application/pdf' });
-      setFile(reconstructedFile);
+  // Extract text from DOCX for AI features
+  const extractTextFromDOCX = async (docxFile: File) => {
+    try {
+      // Dynamically import mammoth
+      const mammoth = await import('mammoth');
       
-      // Extract text for AI features
-      extractTextFromPDF(reconstructedFile);
-    } else {
-      // No file found, redirect to home
-      router.push('/');
+      const arrayBuffer = await docxFile.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      
+      setDocumentText(result.value);
+    } catch (error) {
+      console.error('Error extracting text from DOCX:', error);
+      setDocumentText('Failed to extract text from DOCX');
     }
+  };
+
+  // Extract text from TXT
+  const extractTextFromTXT = async (txtFile: File) => {
+    try {
+      const text = await txtFile.text();
+      setDocumentText(text);
+    } catch (error) {
+      console.error('Error reading text file:', error);
+      setDocumentText('Failed to read text file');
+    }
+  };
+
+  // Extract text based on file type
+  const extractTextFromDocument = async (file: File) => {
+    if (file.type === 'application/pdf') {
+      await extractTextFromPDF(file);
+    } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      await extractTextFromDOCX(file);
+    } else if (file.type === 'text/plain') {
+      await extractTextFromTXT(file);
+    } else {
+      setDocumentText('Unsupported file type');
+    }
+  };
+
+  useEffect(() => {
+    // Get file from IndexedDB
+    const loadDocument = async () => {
+      try {
+        const storedDoc = await getCurrentDocument();
+        
+        if (storedDoc) {
+          // Reconstruct the file from ArrayBuffer
+          const blob = new Blob([storedDoc.data], { type: storedDoc.type });
+          const reconstructedFile = new File([blob], storedDoc.name, { type: storedDoc.type });
+          setFile(reconstructedFile);
+          
+          // Extract text for AI features based on file type
+          await extractTextFromDocument(reconstructedFile);
+          
+          // Set view mode based on file type
+          // Only PDFs support PDF view mode, others default to text
+          if (storedDoc.type === 'application/pdf') {
+            setViewMode('text'); // Start with text for accessibility
+          } else {
+            setViewMode('text'); // DOCX and TXT only have text view
+          }
+        } else {
+          // No file found, redirect to home
+          router.push('/');
+        }
+      } catch (error) {
+        console.error('Error loading document:', error);
+        router.push('/');
+      }
+    };
+
+    loadDocument();
 
     // Load saved settings
     const savedSettings = localStorage.getItem('accessibilitySettings');
@@ -130,7 +187,7 @@ export default function ReaderPage() {
     localStorage.setItem('accessibilitySettings', JSON.stringify(newSettings));
   };
 
-  // Keyboard shortcut for switching view mode
+  // Keyboard shortcut for switching view mode (only for PDFs)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Don't trigger if user is typing in an input
@@ -138,15 +195,20 @@ export default function ReaderPage() {
         return;
       }
 
+      // Toggle view mode for PDF and DOCX files
       if (e.key === 'v') {
         e.preventDefault();
-        setViewMode(prev => prev === 'text' ? 'pdf' : 'text');
+        if (file?.type === 'application/pdf') {
+          setViewMode(prev => prev === 'text' ? 'pdf' : 'text');
+        } else if (file?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          setViewMode(prev => prev === 'text' ? 'docx' : 'text');
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, []);
+  }, [file]);
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
@@ -179,26 +241,49 @@ export default function ReaderPage() {
                   />
                   Text
                 </button>
-                <button
-                  onClick={() => setViewMode('pdf')}
-                  className={`py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                    viewMode === 'pdf' ? 'shadow-md' : ''
-                  }`}
-                  style={{
-                    paddingLeft: '1rem',
-                    paddingRight: '1rem',
-                    backgroundColor: viewMode === 'pdf' ? 'var(--accent)' : 'var(--background)',
-                    color: viewMode === 'pdf' ? 'white' : 'var(--foreground)',
-                  }}
-                >
-                  <img 
-                    src="/icons/pdf.png" 
-                    alt="" 
-                    className="w-4 h-4" 
-                    style={{ filter: isDarkMode ? 'brightness(0) invert(1)' : 'none' }}
-                  />
-                  PDF
-                </button>
+                {/* Show PDF view for PDF files */}
+                {file?.type === 'application/pdf' && (
+                  <button
+                    onClick={() => setViewMode('pdf')}
+                    className={`py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                      viewMode === 'pdf' ? 'shadow-md' : ''
+                    }`}
+                    style={{
+                      paddingLeft: '1rem',
+                      paddingRight: '1rem',
+                      backgroundColor: viewMode === 'pdf' ? 'var(--accent)' : 'var(--background)',
+                      color: viewMode === 'pdf' ? 'white' : 'var(--foreground)',
+                    }}
+                  >
+                    <img 
+                      src="/icons/pdf.png" 
+                      alt="" 
+                      className="w-4 h-4" 
+                      style={{ filter: isDarkMode ? 'brightness(0) invert(1)' : 'none' }}
+                    />
+                    PDF
+                  </button>
+                )}
+                {/* Show DOCX view for DOCX files */}
+                {file?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && (
+                  <button
+                    onClick={() => setViewMode('docx')}
+                    className={`py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                      viewMode === 'docx' ? 'shadow-md' : ''
+                    }`}
+                    style={{
+                      paddingLeft: '1rem',
+                      paddingRight: '1rem',
+                      backgroundColor: viewMode === 'docx' ? 'var(--accent)' : 'var(--background)',
+                      color: viewMode === 'docx' ? 'white' : 'var(--foreground)',
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    DOCX
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -250,13 +335,15 @@ export default function ReaderPage() {
             settings={settings}
             onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
           />
-        ) : (
+        ) : viewMode === 'pdf' ? (
           <PDFViewer 
             file={file} 
             onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
             accessibilitySettings={settings}
           />
-        )}
+        ) : viewMode === 'docx' ? (
+          <DocxViewer file={file!} />
+        ) : null}
       </div>
       <AccessibilitySidebar
         isOpen={isSidebarOpen}

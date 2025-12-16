@@ -28,21 +28,33 @@ interface PDFViewerProps {
 
 export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
-    setPageNumber(1);
+    setCurrentPage(1);
+  }
+
+  function scrollToPage(pageNum: number) {
+    const pageElement = document.getElementById(`pdf-page-${pageNum}`);
+    if (pageElement) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setCurrentPage(pageNum);
+    }
   }
 
   function goToPrevPage() {
-    setPageNumber(prev => Math.max(1, prev - 1));
+    if (currentPage > 1) {
+      scrollToPage(currentPage - 1);
+    }
   }
 
   function goToNextPage() {
-    setPageNumber(prev => Math.min(numPages, prev + 1));
+    if (currentPage < numPages) {
+      scrollToPage(currentPage + 1);
+    }
   }
 
   function zoomIn() {
@@ -78,11 +90,11 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
           break;
         case 'Home':
           e.preventDefault();
-          setPageNumber(1);
+          scrollToPage(1);
           break;
         case 'End':
           e.preventDefault();
-          setPageNumber(numPages);
+          scrollToPage(numPages);
           break;
         case '+':
         case '=':
@@ -111,7 +123,7 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [numPages]);
+  }, [numPages, currentPage]);
 
   if (!file) {
     return null;
@@ -234,11 +246,11 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border bg-muted/30" style={{ padding: '1rem 3rem' }}>
         <div className="flex items-center gap-4">
-          {/* Navigation */}
+          {/* Page Navigation */}
           <div className="flex items-center gap-2">
             <button
               onClick={goToPrevPage}
-              disabled={pageNumber <= 1}
+              disabled={currentPage <= 1}
               className="rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 1.5rem' }}
               aria-label="Previous page"
@@ -246,11 +258,11 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
               ←
             </button>
             <span className="text-sm font-medium text-foreground">
-              Page {pageNumber} of {numPages}
+              Page {currentPage} of {numPages}
             </span>
             <button
               onClick={goToNextPage}
-              disabled={pageNumber >= numPages}
+              disabled={currentPage >= numPages}
               className="rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 1.5rem' }}
               aria-label="Next page"
@@ -329,36 +341,49 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
         </div>
       </div>
 
-      {/* PDF Display */}
-      <div className="flex-1 overflow-auto p-8 flex justify-center"
+      {/* PDF Display - All pages in scrollable view */}
+      <div className="flex-1 overflow-auto p-8"
         style={{
           fontSize: `${accessibilitySettings.fontSize}px`,
           lineHeight: accessibilitySettings.lineHeight,
           letterSpacing: `${accessibilitySettings.letterSpacing}px`,
         }}
       >
-        <Document
-          file={file}
-          onLoadSuccess={onDocumentLoadSuccess}
-          loading={
-            <div className="flex items-center justify-center p-8">
-              <div className="text-muted-foreground">Loading PDF...</div>
-            </div>
-          }
-          error={
-            <div className="flex items-center justify-center p-8">
-              <div className="text-red-500">Failed to load PDF. Please try another file.</div>
-            </div>
-          }
-        >
-          <Page
-            pageNumber={pageNumber}
-            scale={scale}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            className="shadow-2xl"
-          />
-        </Document>
+        <div className="flex flex-col items-center gap-4">
+          <Document
+            file={file}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={
+              <div className="flex items-center justify-center p-8">
+                <div className="text-muted-foreground">Loading PDF...</div>
+              </div>
+            }
+            error={
+              <div className="flex items-center justify-center p-8">
+                <div className="text-red-500">Failed to load PDF. Please try another file.</div>
+              </div>
+            }
+          >
+            {Array.from(new Array(numPages), (el, index) => (
+              <div 
+                key={`page_${index + 1}`} 
+                id={`pdf-page-${index + 1}`}
+                className="mb-4 scroll-mt-4"
+              >
+                <Page
+                  pageNumber={index + 1}
+                  scale={scale}
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                  className="shadow-2xl"
+                />
+                <div className="text-center mt-2 text-sm text-muted-foreground">
+                  Page {index + 1}
+                </div>
+              </div>
+            ))}
+          </Document>
+        </div>
       </div>
     </div>
   );
