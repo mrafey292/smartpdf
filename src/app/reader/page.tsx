@@ -8,7 +8,9 @@ import { TextReader } from '@/components/reader/TextReader';
 import { AccessibilitySidebar } from '@/components/reader/AccessibilitySidebar';
 import { ChatPanel } from '@/components/reader/ChatPanel';
 import { SummaryPanel } from '@/components/reader/SummaryPanel';
+import { VoiceAssistant } from '@/components/reader/VoiceAssistant';
 import { getCurrentDocument } from '@/lib/storage';
+import type { CommandResult } from '@/lib/voice-assistant';
 
 // Dynamically import PDFViewer to avoid SSR issues with react-pdf
 const PDFViewer = dynamic(() => import('@/components/pdf/PDFViewer').then(mod => ({ default: mod.PDFViewer })), {
@@ -187,6 +189,74 @@ export default function ReaderPage() {
     localStorage.setItem('accessibilitySettings', JSON.stringify(newSettings));
   };
 
+  // Voice command handler
+  const handleVoiceCommand = (result: CommandResult) => {
+    console.log('Executing voice command:', result);
+    
+    switch (result.command) {
+      case 'next-page':
+      case 'previous-page':
+      case 'first-page':
+      case 'last-page':
+      case 'go-to-page':
+        // These will be handled by the individual viewers through keyboard events simulation
+        // or we can add ref callbacks to control them directly
+        break;
+      
+      case 'summarize':
+        setIsSummaryOpen(true);
+        break;
+      
+      case 'chat':
+        setIsChatOpen(true);
+        break;
+      
+      case 'ask-question':
+        setIsChatOpen(true);
+        // Could potentially pre-fill the question
+        break;
+      
+      case 'accessibility':
+        setIsSidebarOpen(true);
+        break;
+      
+      case 'switch-view':
+        if (file?.type === 'application/pdf') {
+          setViewMode(prev => prev === 'text' ? 'pdf' : 'text');
+        } else if (file?.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          setViewMode(prev => prev === 'text' ? 'docx' : 'text');
+        }
+        break;
+      
+      case 'dark-mode':
+        document.documentElement.classList.add('dark');
+        break;
+      
+      case 'light-mode':
+        document.documentElement.classList.remove('dark');
+        break;
+      
+      case 'increase-font':
+        handleSettingsChange({ ...settings, fontSize: Math.min(settings.fontSize + 2, 32) });
+        break;
+      
+      case 'decrease-font':
+        handleSettingsChange({ ...settings, fontSize: Math.max(settings.fontSize - 2, 12) });
+        break;
+      
+      case 'read-aloud':
+      case 'stop-reading':
+      case 'pause-reading':
+      case 'resume-reading':
+        // These will be handled by the TextReader component
+        // We could enable TTS if not already enabled
+        if (!settings.ttsEnabled && result.command === 'read-aloud') {
+          handleSettingsChange({ ...settings, ttsEnabled: true });
+        }
+        break;
+    }
+  };
+
   // Keyboard shortcut for switching view mode (only for PDFs)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -360,6 +430,10 @@ export default function ReaderPage() {
         documentText={documentText || 'Loading document...'}
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
+      />
+      <VoiceAssistant
+        onCommand={handleVoiceCommand}
+        isEnabled={true}
       />
     </div>
   );
