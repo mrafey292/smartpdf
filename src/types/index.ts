@@ -134,4 +134,10 @@ export interface ReaderRef {
   goToPage: (page: number) => void;
   firstPage: () => void;
   lastPage: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
+  play: () => void;
+  pause: () => void;
+  stop: () => void;
 }

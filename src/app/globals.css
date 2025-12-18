@@ -12,13 +12,13 @@
 /* Accessibility-focused CSS Variables */
 :root {
   /* Theme Colors */
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8f8f8;
+  --foreground: #2a2a2a;
   --primary: #2563eb;
   --secondary: #64748b;
   --accent: #8b5cf6;
-  --muted: #f1f5f9;
-  --border: #e2e8f0;
+  --muted: #efefef;
+  --border: #d9d9d9;
   
   /* Accessibility Settings */
   --base-font-size: 18px;
@@ -48,13 +48,13 @@
 /* Dark Theme */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1a1a1a;
+    --foreground: #e5e5e5;
     --primary: #3b82f6;
     --secondary: #94a3b8;
     --accent: #38bdf8;
-    --muted: #1e293b;
-    --border: #334155;
+    --muted: #2a2a2a;
+    --border: #3d3d3d;
   }
 }
 
@@ -71,24 +71,24 @@
 
 /* Dark Mode */
 [data-theme="dark"] {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #1a1a1a;
+  --foreground: #e5e5e5;
   --primary: #3b82f6;
   --secondary: #94a3b8;
   --accent: #a78bfa;
-  --muted: #1e293b;
-  --border: #334155;
+  --muted: #2a2a2a;
+  --border: #3d3d3d;
 }
 
 /* Light Mode */
 [data-theme="light"] {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8f8f8;
+  --foreground: #2a2a2a;
   --primary: #2563eb;
   --secondary: #64748b;
   --accent: #8b5cf6;
-  --muted: #f1f5f9;
-  --border: #e2e8f0;
+  --muted: #efefef;
+  --border: #d9d9d9;
 }
 
 /* Base Styles */

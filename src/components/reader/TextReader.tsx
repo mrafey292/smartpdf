@@ -131,7 +131,83 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
     const extractStructuredText = async () => {
       setLoading(true);
       try {
-        // Handle different file types
+        // Try AI extraction first
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const aiResponse = await fetch('/api/extract-text', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (aiResponse.ok) {
+          const data = await aiResponse.json();
+          const markdown = data.text;
+
+          // Parse Markdown into StructuredContent
+          const lines = markdown.split('\n');
+          const structured: StructuredContent[] = [];
+          const breaks: number[] = [0];
+          let currentParagraph = '';
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (!line) {
+              if (currentParagraph) {
+                structured.push({ type: 'paragraph', content: currentParagraph });
+                currentParagraph = '';
+              }
+              continue;
+            }
+
+            // Check for page breaks
+            const pageBreakMatch = line.match(/\[PAGE_BREAK_(\d+)\]/);
+            if (pageBreakMatch) {
+              if (currentParagraph) {
+                structured.push({ type: 'paragraph', content: currentParagraph });
+                currentParagraph = '';
+              }
+              // Add a visual separator for the page break
+              structured.push({
+                type: 'paragraph',
+                content: '───────────────────',
+              });
+              breaks.push(structured.length);
+              continue;
+            }
+
+            // Check for headings (more robust regex)
+            const headingMatch = line.match(/^(#{1,6})\s*(.*?)\s*#*$/);
+            if (headingMatch && headingMatch[2]) {
+              if (currentParagraph) {
+                structured.push({ type: 'paragraph', content: currentParagraph });
+                currentParagraph = '';
+              }
+              structured.push({
+                type: 'heading',
+                level: headingMatch[1].length,
+                content: headingMatch[2].trim()
+              });
+            } else {
+              // Accumulate paragraph text
+              currentParagraph += (currentParagraph ? ' ' : '') + line;
+            }
+          }
+
+          if (currentParagraph) {
+            structured.push({ type: 'paragraph', content: currentParagraph });
+          }
+
+          setAllContent(structured);
+          setPageBreaks(breaks);
+          setLoading(false);
+          return; // Success!
+        }
+
+        // Fallback to local extraction if AI fails
+        console.warn('AI extraction failed, falling back to local extraction');
+        
         if (file.type === 'application/pdf') {
           // Wait for pdfjs to load
           if (!pdfjs) {
@@ -280,7 +356,17 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
     },
     firstPage: () => scrollToPage(1),
     lastPage: () => scrollToPage(pageBreaks.length),
-  }), [currentPage, pageBreaks]);
+    zoomIn: () => {}, // Handled by font size settings
+    zoomOut: () => {}, // Handled by font size settings
+    resetZoom: () => {}, // Handled by font size settings
+    play: () => {
+      if (!isPlaying || isPaused) handlePlayPause();
+    },
+    pause: () => {
+      if (isPlaying && !isPaused) handlePlayPause();
+    },
+    stop: handleStop,
+  }), [currentPage, pageBreaks, isPlaying, isPaused, settings.ttsEnabled]);
 
   const handlePlayPause = async () => {
     if (!ttsServiceRef.current || !settings.ttsEnabled) return;
@@ -448,6 +534,23 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
     return 1;
   };
 
+  const renderFormattedText = (text: string) => {
+    // Simple regex-based markdown parser for bold and italic
+    // Handle bold (**text** or __text__) and italic (*text* or _text_)
+    // We use a more comprehensive regex to handle multiple occurrences
+    const parts = text.split(/(\*\*.*?\*\*|__.*?__|(?<!\*)\*.*?\*(?!\*)|(?<!_)_.*?_(?!_))/g);
+    
+    return parts.map((part, i) => {
+      if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
+        return <em key={i}>{part.slice(1, -1)}</em>;
+      }
+      return part;
+    });
+  };
+
   const renderContent = (item: StructuredContent, index: number) => {
     const pageNum = getPageNumber(index);
     const isPageStart = pageBreaks.includes(index);
@@ -476,7 +579,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
       
       return (
         <div key={index} id={isPageStart ? `text-page-${pageNum}` : undefined} className={isPageStart ? 'scroll-mt-4' : ''}>
-          <HeadingTag style={headingStyle}>{item.content}</HeadingTag>
+          <HeadingTag style={headingStyle}>{renderFormattedText(item.content)}</HeadingTag>
         </div>
       );
     }
@@ -491,7 +594,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
             marginBottom: '1.5rem',
           }}
         >
-          {item.content}
+          {renderFormattedText(item.content)}
         </p>
       </div>
     );

@@ -59,9 +59,39 @@ export default function ReaderPage() {
   const [settings, setSettings] = useState<AccessibilitySettings>(defaultSettings);
   const [viewMode, setViewMode] = useState<'pdf' | 'docx' | 'text'>('text'); // Default to text mode for accessibility
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const router = useRouter();
 
-  // Extract text from PDF for AI features
+  // Extract text using AI for better structure and accuracy
+  const extractTextWithAI = async (file: File) => {
+    try {
+      setIsExtracting(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/extract-text', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('AI extraction failed');
+      }
+
+      const data = await response.json();
+      // Strip page markers for the general document text used in chat/summary
+      const cleanText = data.text.replace(/\[PAGE_BREAK_\d+\]/g, '');
+      setDocumentText(cleanText);
+    } catch (error) {
+      console.error('Error extracting text with AI:', error);
+      // Fallback to local extraction
+      await extractTextFromDocumentLocal(file);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  // Extract text from PDF for AI features (Local Fallback)
   const extractTextFromPDF = async (pdfFile: File) => {
     try {
       // Dynamically import pdfjs
@@ -90,7 +120,7 @@ export default function ReaderPage() {
     }
   };
 
-  // Extract text from DOCX for AI features
+  // Extract text from DOCX for AI features (Local Fallback)
   const extractTextFromDOCX = async (docxFile: File) => {
     try {
       // Dynamically import mammoth
@@ -106,7 +136,7 @@ export default function ReaderPage() {
     }
   };
 
-  // Extract text from TXT
+  // Extract text from TXT (Local Fallback)
   const extractTextFromTXT = async (txtFile: File) => {
     try {
       const text = await txtFile.text();
@@ -117,8 +147,8 @@ export default function ReaderPage() {
     }
   };
 
-  // Extract text based on file type
-  const extractTextFromDocument = async (file: File) => {
+  // Local extraction fallback
+  const extractTextFromDocumentLocal = async (file: File) => {
     if (file.type === 'application/pdf') {
       await extractTextFromPDF(file);
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
@@ -142,8 +172,8 @@ export default function ReaderPage() {
           const reconstructedFile = new File([blob], storedDoc.name, { type: storedDoc.type });
           setFile(reconstructedFile);
           
-          // Extract text for AI features based on file type
-          await extractTextFromDocument(reconstructedFile);
+          // Extract text using AI
+          await extractTextWithAI(reconstructedFile);
           
           // Set view mode based on file type
           // Only PDFs support PDF view mode, others default to text
@@ -213,6 +243,18 @@ export default function ReaderPage() {
           readerRef.current?.goToPage(parseInt(result.parameters.page));
         }
         break;
+
+      case 'zoom-in':
+        readerRef.current?.zoomIn();
+        break;
+      
+      case 'zoom-out':
+        readerRef.current?.zoomOut();
+        break;
+      
+      case 'reset-zoom':
+        readerRef.current?.resetZoom();
+        break;
       
       case 'summarize':
         setIsSummaryOpen(true);
@@ -256,14 +298,23 @@ export default function ReaderPage() {
         break;
       
       case 'read-aloud':
-      case 'stop-reading':
-      case 'pause-reading':
-      case 'resume-reading':
-        // These will be handled by the TextReader component
-        // We could enable TTS if not already enabled
-        if (!settings.ttsEnabled && result.command === 'read-aloud') {
+        if (!settings.ttsEnabled) {
           handleSettingsChange({ ...settings, ttsEnabled: true });
         }
+        // Small delay to allow state to update before playing
+        setTimeout(() => readerRef.current?.play(), 100);
+        break;
+
+      case 'stop-reading':
+        readerRef.current?.stop();
+        break;
+
+      case 'pause-reading':
+        readerRef.current?.pause();
+        break;
+
+      case 'resume-reading':
+        readerRef.current?.play();
         break;
     }
   };

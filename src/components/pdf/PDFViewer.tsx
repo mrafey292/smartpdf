@@ -58,6 +58,12 @@ export const PDFViewer = forwardRef<ReaderRef, PDFViewerProps>(({ file, onOpenAc
     },
     firstPage: () => scrollToPage(1),
     lastPage: () => scrollToPage(numPages),
+    zoomIn: () => setScale(s => Math.min(s + 0.2, 3.0)),
+    zoomOut: () => setScale(s => Math.max(s - 0.2, 0.5)),
+    resetZoom: () => setScale(1.0),
+    play: () => {}, // Not implemented for PDF view
+    pause: () => {}, // Not implemented for PDF view
+    stop: () => {}, // Not implemented for PDF view
   }), [currentPage, numPages]);
 
   function goToPrevPage() {

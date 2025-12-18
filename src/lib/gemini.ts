@@ -103,6 +103,42 @@ export async function extractKeyConcepts(documentText: string) {
 }
 
 /**
+ * Extract structured text from a document using Gemini's multimodal capabilities
+ */
+export async function extractStructuredText(fileBase64: string, mimeType: string) {
+  const model = getGeminiProModel();
+  
+  const prompt = `
+    You are an expert document parser. Your task is to extract all text from the provided document and format it in clean, structured Markdown.
+    
+    Rules:
+    1. Preserve all headings (H1, H2, etc.) using appropriate Markdown syntax.
+    2. Format tables correctly using Markdown table syntax.
+    3. Preserve lists (bulleted or numbered).
+    4. Maintain the logical flow and structure of the document.
+    5. IMPORTANT: Whenever you encounter a new page in the document, insert a marker like this: [PAGE_BREAK_n] where n is the page number (e.g., [PAGE_BREAK_1], [PAGE_BREAK_2]).
+    6. Do not add any commentary or intro/outro text. Just the extracted content.
+    7. If there are images with text, extract that text as well.
+    8. If there are mathematical formulas, use LaTeX if possible or clear text representation.
+    
+    Return ONLY the Markdown content.
+  `;
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        data: fileBase64,
+        mimeType: mimeType
+      }
+    },
+    { text: prompt }
+  ]);
+
+  const response = await result.response;
+  return response.text();
+}
+
+/**
  * Answer questions about accessibility features in the document
  */
 export async function explainAccessibility(documentText: string, feature: string) {

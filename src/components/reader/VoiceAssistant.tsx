@@ -150,180 +150,140 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
       {showPanel && (
         <>
           <div 
-            className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
             onClick={() => setShowPanel(false)}
             aria-hidden="true"
           />
           <div 
-            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-3xl max-h-[85vh] bg-background border border-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col"
+            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-background border border-border rounded-xl shadow-2xl z-50"
+            style={{ width: '32rem', maxHeight: '80vh', overflow: 'auto' }}
             role="dialog"
             aria-label="Voice Commands"
           >
             {/* Header */}
-            <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
-              <div>
-                <h2 className="text-3xl font-bold text-foreground">Voice Assistant</h2>
-                <p className="text-base text-muted-foreground mt-1">Control SmartReader with your voice</p>
+            <div className="border-b border-border" style={{ padding: '1.25rem 1.5rem' }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  <h2 className="text-lg font-bold text-foreground">Voice Assistant</h2>
+                </div>
+                <button
+                  onClick={() => setShowPanel(false)}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-              <button
-                onClick={() => setShowPanel(false)}
-                className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                aria-label="Close"
-              >
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
 
-            {/* Scrollable content area */}
-            <div className="overflow-y-auto p-6">
-              <div className="flex flex-col gap-6">
+            {/* Content */}
+            <div style={{ padding: '1.5rem' }}>
+              <div className="space-y-12">
                 {/* Navigation */}
-                <div className="p-6 rounded-xl border border-border bg-card hover:border-accent/50 transition-colors">
-                  <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-6">Navigation</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Next / Previous page</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Next page" • "Previous page"</span>
                     </div>
-                    Navigation
-                  </h3>
-                  <div className="space-y-4 text-base">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Next page&quot; • &quot;Previous page&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">First / Last page</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"First page" • "Last page"</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;First page&quot; • &quot;Last page&quot;</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Go to page 5&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Go to specific page</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Go to page 5"</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Zoom */}
-                <div className="p-6 rounded-xl border border-border bg-card hover:border-accent/50 transition-colors">
-                  <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                      </svg>
+                {/* Zoom & Font */}
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-6">Zoom & Font</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Zoom in / out</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Zoom in" • "Zoom out"</span>
                     </div>
-                    Zoom & Font
-                  </h3>
-                  <div className="space-y-4 text-base">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Zoom in&quot; • &quot;Zoom out&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Reset zoom</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Reset zoom"</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Reset zoom&quot;</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Increase font&quot; • &quot;Decrease font&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Font size</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Increase font" • "Decrease font"</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Reading */}
-                <div className="p-6 rounded-xl border border-border bg-card hover:border-accent/50 transition-colors">
-                  <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                      </svg>
+                {/* Text-to-Speech */}
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-6">Text-to-Speech</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Start reading</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Read aloud" • "Start reading"</span>
                     </div>
-                    Text-to-Speech
-                  </h3>
-                  <div className="space-y-4 text-base">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Read aloud&quot; • &quot;Start reading&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Pause / Resume</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Pause reading" • "Resume reading"</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Pause reading&quot; • &quot;Resume reading&quot;</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Stop reading&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Stop reading</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Stop reading"</span>
                     </div>
                   </div>
                 </div>
 
                 {/* AI Features */}
-                <div className="p-6 rounded-xl border border-border bg-card hover:border-accent/50 transition-colors">
-                  <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-6">AI Features</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Summarize</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Summarize" • "Give me a summary"</span>
                     </div>
-                    AI Features
-                  </h3>
-                  <div className="space-y-4 text-base">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Summarize&quot; • &quot;Give me a summary&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Chat</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Open chat" • "Chat with document"</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Open chat&quot; • &quot;Chat with document&quot;</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                      <p className="text-foreground/90 font-medium">Ask questions: &quot;What is...?&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Ask questions</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"What is...?"</span>
                     </div>
                   </div>
                 </div>
 
                 {/* View & Theme */}
-                <div className="p-6 rounded-xl border border-border bg-card hover:border-accent/50 transition-colors">
-                  <h3 className="text-xl font-bold text-foreground mb-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-6">View & Theme</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Switch view</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Switch view" • "PDF view"</span>
                     </div>
-                    View & Theme
-                  </h3>
-                  <div className="space-y-4 text-base">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Switch view&quot; • &quot;PDF view&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Theme</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Dark mode" • "Light mode"</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Dark mode&quot; • &quot;Light mode&quot;</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                      <p className="text-foreground/90 font-medium">&quot;Open accessibility&quot;</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Accessibility</span>
+                      <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Open accessibility"</span>
                     </div>
                   </div>
                 </div>
 
-                {/* How to use */}
-                <div className="p-6 rounded-xl border border-border bg-muted/30">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-accent/10 text-accent flex items-center justify-center flex-shrink-0">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 className="text-base font-bold text-foreground mb-2">How to use</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        Click the floating microphone button and speak naturally. The assistant will understand your command and execute it automatically.
-                      </p>
-                    </div>
-                  </div>
+                {/* Usage Tip */}
+                <div className="pt-2">
+                  <p className="text-xs text-muted-foreground italic">
+                    Tip: Click the microphone button and speak naturally to execute commands.
+                  </p>
                 </div>
               </div>
             </div>
