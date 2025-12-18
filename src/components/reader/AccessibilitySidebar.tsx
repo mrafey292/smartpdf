@@ -115,6 +115,23 @@ export function AccessibilitySidebar({ isOpen, onClose, settings, onSettingsChan
               </select>
             </div>
 
+            {/* Theme */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label className="block text-sm font-medium text-foreground" style={{ marginBottom: '0.75rem' }}>
+                Theme
+              </label>
+              <select
+                value={settings.theme}
+                onChange={(e) => updateSetting('theme', e.target.value as any)}
+                className="w-full rounded-lg border border-border bg-background text-foreground cursor-pointer hover:border-accent transition-colors"
+                style={{ padding: '0.75rem 1rem' }}
+              >
+                <option value="light">☀️ Light Mode</option>
+                <option value="dark">🌙 Dark Mode</option>
+                <option value="high-contrast">👁️ High Contrast</option>
+              </select>
+            </div>
+
             {/* Line Height */}
             <div style={{ marginBottom: '1.5rem' }}>
               <div className="flex items-center justify-between" style={{ marginBottom: '0.75rem' }}>
@@ -261,35 +278,26 @@ export function AccessibilitySidebar({ isOpen, onClose, settings, onSettingsChan
             
             <button
               onClick={() => {
-                updateSetting('fontSize', 16);
-                updateSetting('fontFamily', 'default');
-                updateSetting('lineHeight', 1.6);
-                updateSetting('letterSpacing', 0);
-                updateSetting('colorOverlay', 'none');
-                updateSetting('ttsEnabled', false);
-                updateSetting('ttsSpeed', 1);
-                updateSetting('readerMode', false);
+                onSettingsChange({
+                  fontSize: 16,
+                  fontFamily: 'default',
+                  lineHeight: 1.6,
+                  letterSpacing: 0,
+                  theme: 'light',
+                  colorOverlay: 'none',
+                  ttsEnabled: false,
+                  ttsSpeed: 1,
+                  readerMode: false,
+                });
               }}
               className="w-full rounded-lg font-medium transition-all hover:shadow-lg"
               style={{ 
                 padding: '1rem',
                 backgroundColor: 'var(--muted)',
                 color: 'var(--foreground)',
-                marginBottom: '0.75rem'
               }}
             >
               Reset to Defaults
-            </button>
-            
-            <button
-              className="w-full rounded-lg font-medium transition-all hover:shadow-xl"
-              style={{ 
-                padding: '1rem',
-                backgroundColor: 'var(--accent)',
-                color: 'white'
-              }}
-            >
-              Save Preferences
             </button>
           </div>
         </div>

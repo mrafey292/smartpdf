@@ -110,13 +110,22 @@ interface ChatPanelProps {
   documentText: string;
   isOpen: boolean;
   onClose: () => void;
+  initialQuestion?: string;
 }
 
-export function ChatPanel({ documentText, isOpen, onClose }: ChatPanelProps) {
+export function ChatPanel({ documentText, isOpen, onClose, initialQuestion }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle initial question from voice assistant
+  useEffect(() => {
+    if (isOpen && initialQuestion && messages.length === 0) {
+      setInput(initialQuestion);
+      // We don't auto-send to give user a chance to review/edit
+    }
+  }, [isOpen, initialQuestion]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

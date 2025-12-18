@@ -55,6 +55,7 @@ export default function ReaderPage() {
   const [documentText, setDocumentText] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInitialQuestion, setChatInitialQuestion] = useState<string | undefined>(undefined);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [settings, setSettings] = useState<AccessibilitySettings>(defaultSettings);
   const [viewMode, setViewMode] = useState<'pdf' | 'docx' | 'text'>('text'); // Default to text mode for accessibility
@@ -205,7 +206,17 @@ export default function ReaderPage() {
 
     // Watch for theme changes
     const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
+      const isDark = document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+      
+      // Sync settings if theme was changed externally (e.g. via ThemeToggle)
+      setSettings(prev => {
+        const currentTheme = document.documentElement.getAttribute('data-theme') as 'light' | 'dark' | 'high-contrast';
+        if (prev.theme !== currentTheme && currentTheme) {
+          return { ...prev, theme: currentTheme };
+        }
+        return prev;
+      });
     });
 
     observer.observe(document.documentElement, {
@@ -215,6 +226,20 @@ export default function ReaderPage() {
 
     return () => observer.disconnect();
   }, [router]);
+
+  // Apply theme when settings change
+  useEffect(() => {
+    if (settings.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (settings.theme === 'high-contrast') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'high-contrast');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, [settings.theme]);
 
   const handleSettingsChange = (newSettings: AccessibilitySettings) => {
     setSettings(newSettings);
@@ -239,21 +264,35 @@ export default function ReaderPage() {
         readerRef.current?.lastPage();
         break;
       case 'go-to-page':
-        if (result.parameters?.page) {
+        if (result.parameters?.pageNumber) {
+          readerRef.current?.goToPage(parseInt(result.parameters.pageNumber));
+        } else if (result.parameters?.page) {
           readerRef.current?.goToPage(parseInt(result.parameters.page));
         }
         break;
 
       case 'zoom-in':
-        readerRef.current?.zoomIn();
+        if (viewMode === 'text') {
+          handleSettingsChange({ ...settings, fontSize: Math.min(settings.fontSize + 2, 32) });
+        } else {
+          readerRef.current?.zoomIn();
+        }
         break;
       
       case 'zoom-out':
-        readerRef.current?.zoomOut();
+        if (viewMode === 'text') {
+          handleSettingsChange({ ...settings, fontSize: Math.max(settings.fontSize - 2, 12) });
+        } else {
+          readerRef.current?.zoomOut();
+        }
         break;
       
       case 'reset-zoom':
-        readerRef.current?.resetZoom();
+        if (viewMode === 'text') {
+          handleSettingsChange({ ...settings, fontSize: 16 });
+        } else {
+          readerRef.current?.resetZoom();
+        }
         break;
       
       case 'summarize':
@@ -261,12 +300,15 @@ export default function ReaderPage() {
         break;
       
       case 'chat':
+        setChatInitialQuestion(undefined);
         setIsChatOpen(true);
         break;
       
       case 'ask-question':
+        if (result.parameters?.question) {
+          setChatInitialQuestion(result.parameters.question);
+        }
         setIsChatOpen(true);
-        // Could potentially pre-fill the question
         break;
       
       case 'accessibility':
@@ -282,11 +324,11 @@ export default function ReaderPage() {
         break;
       
       case 'dark-mode':
-        document.documentElement.classList.add('dark');
+        handleSettingsChange({ ...settings, theme: 'dark' });
         break;
       
       case 'light-mode':
-        document.documentElement.classList.remove('dark');
+        handleSettingsChange({ ...settings, theme: 'light' });
         break;
       
       case 'increase-font':
@@ -488,7 +530,11 @@ export default function ReaderPage() {
       <ChatPanel
         documentText={documentText || 'Loading document...'}
         isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
+        onClose={() => {
+          setIsChatOpen(false);
+          setChatInitialQuestion(undefined);
+        }}
+        initialQuestion={chatInitialQuestion}
       />
       <SummaryPanel
         documentText={documentText || 'Loading document...'}
