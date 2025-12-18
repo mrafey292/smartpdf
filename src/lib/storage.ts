@@ -10,6 +10,7 @@ interface StoredDocument {
   data: ArrayBuffer;
   type: string;
   uploadedAt: Date;
+  extractedText?: string;
 }
 
 /**
@@ -72,6 +73,29 @@ export async function getCurrentDocument(): Promise<StoredDocument | null> {
     const request = store.get('current');
 
     request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+    
+    transaction.oncomplete = () => db.close();
+  });
+}
+
+/**
+ * Update the extracted text for the current document
+ */
+export async function updateExtractedText(text: string): Promise<void> {
+  const db = await openDB();
+  const doc = await getCurrentDocument();
+  
+  if (!doc) return;
+
+  doc.extractedText = text;
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(doc);
+
+    request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
     
     transaction.oncomplete = () => db.close();

@@ -9,7 +9,7 @@ import { AccessibilitySidebar } from '@/components/reader/AccessibilitySidebar';
 import { ChatPanel } from '@/components/reader/ChatPanel';
 import { SummaryPanel } from '@/components/reader/SummaryPanel';
 import { VoiceAssistant } from '@/components/reader/VoiceAssistant';
-import { getCurrentDocument } from '@/lib/storage';
+import { getCurrentDocument, updateExtractedText } from '@/lib/storage';
 import type { CommandResult } from '@/lib/voice-assistant';
 import { ReaderRef } from '@/types';
 
@@ -83,6 +83,9 @@ export default function ReaderPage() {
       // Strip page markers for the general document text used in chat/summary
       const cleanText = data.text.replace(/\[PAGE_BREAK_\d+\]/g, '');
       setDocumentText(cleanText);
+      
+      // Save the extracted text to IndexedDB so we don't have to call the API again
+      await updateExtractedText(data.text);
     } catch (error) {
       console.error('Error extracting text with AI:', error);
       // Fallback to local extraction
@@ -173,8 +176,14 @@ export default function ReaderPage() {
           const reconstructedFile = new File([blob], storedDoc.name, { type: storedDoc.type });
           setFile(reconstructedFile);
           
-          // Extract text using AI
-          await extractTextWithAI(reconstructedFile);
+          // If we already have extracted text, use it. Otherwise, call the AI.
+          if (storedDoc.extractedText) {
+            const cleanText = storedDoc.extractedText.replace(/\[PAGE_BREAK_\d+\]/g, '');
+            setDocumentText(cleanText);
+          } else {
+            // Extract text using AI
+            await extractTextWithAI(reconstructedFile);
+          }
           
           // Set view mode based on file type
           // Only PDFs support PDF view mode, others default to text

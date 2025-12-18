@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import dynamic from 'next/dynamic';
 import { TextToSpeechService } from '@/lib/tts';
+import { getCurrentDocument } from '@/lib/storage';
 import { ReaderRef } from '@/types';
 
 // Dynamically import pdfjs to avoid SSR issues
@@ -53,10 +54,12 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
   const [pageBreaks, setPageBreaks] = useState<number[]>([]); // Indices where pages start
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
+  const [extractionMode, setExtractionMode] = useState<'ai' | 'local' | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [showShortcuts, setShowShortcuts] = useState<boolean>(false);
   const ttsServiceRef = useRef<TextToSpeechService | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Initialize TTS service
   useEffect(() => {
@@ -125,12 +128,46 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [settings.ttsEnabled, isPlaying, isPaused, pageBreaks.length, currentPage]);
 
+  // Scroll listener to update current page
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || pageBreaks.length <= 1) return;
+
+    const handleScroll = () => {
+      const scrollPos = container.scrollTop + 100; // Add small offset
+      
+      // Find which page we are currently viewing
+      for (let i = pageBreaks.length - 1; i >= 0; i--) {
+        const pageElement = document.getElementById(`text-page-${i + 1}`);
+        if (pageElement && pageElement.offsetTop <= scrollPos) {
+          if (currentPage !== i + 1) {
+            setCurrentPage(i + 1);
+          }
+          break;
+        }
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [pageBreaks, currentPage]);
+
   useEffect(() => {
     if (!file) return;
 
     const extractStructuredText = async () => {
       setLoading(true);
       try {
+        // Check if we already have extracted text in IndexedDB
+        const storedDoc = await getCurrentDocument();
+        if (storedDoc?.extractedText) {
+          const markdown = storedDoc.extractedText;
+          parseAndSetContent(markdown);
+          setExtractionMode('ai');
+          setLoading(false);
+          return;
+        }
+
         // Try AI extraction first
         const formData = new FormData();
         formData.append('file', file);
@@ -143,70 +180,15 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
         if (aiResponse.ok) {
           const data = await aiResponse.json();
           const markdown = data.text;
-
-          // Parse Markdown into StructuredContent
-          const lines = markdown.split('\n');
-          const structured: StructuredContent[] = [];
-          const breaks: number[] = [0];
-          let currentParagraph = '';
-
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            
-            if (!line) {
-              if (currentParagraph) {
-                structured.push({ type: 'paragraph', content: currentParagraph });
-                currentParagraph = '';
-              }
-              continue;
-            }
-
-            // Check for page breaks
-            const pageBreakMatch = line.match(/\[PAGE_BREAK_(\d+)\]/);
-            if (pageBreakMatch) {
-              if (currentParagraph) {
-                structured.push({ type: 'paragraph', content: currentParagraph });
-                currentParagraph = '';
-              }
-              // Add a visual separator for the page break
-              structured.push({
-                type: 'paragraph',
-                content: '───────────────────',
-              });
-              breaks.push(structured.length);
-              continue;
-            }
-
-            // Check for headings (more robust regex)
-            const headingMatch = line.match(/^(#{1,6})\s*(.*?)\s*#*$/);
-            if (headingMatch && headingMatch[2]) {
-              if (currentParagraph) {
-                structured.push({ type: 'paragraph', content: currentParagraph });
-                currentParagraph = '';
-              }
-              structured.push({
-                type: 'heading',
-                level: headingMatch[1].length,
-                content: headingMatch[2].trim()
-              });
-            } else {
-              // Accumulate paragraph text
-              currentParagraph += (currentParagraph ? ' ' : '') + line;
-            }
-          }
-
-          if (currentParagraph) {
-            structured.push({ type: 'paragraph', content: currentParagraph });
-          }
-
-          setAllContent(structured);
-          setPageBreaks(breaks);
+          parseAndSetContent(markdown);
+          setExtractionMode('ai');
           setLoading(false);
           return; // Success!
         }
 
         // Fallback to local extraction if AI fails
         console.warn('AI extraction failed, falling back to local extraction');
+        setExtractionMode('local');
         
         if (file.type === 'application/pdf') {
           // Wait for pdfjs to load
@@ -312,6 +294,66 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
       }
     };
 
+    const parseAndSetContent = (markdown: string) => {
+      // Parse Markdown into StructuredContent
+      const lines = markdown.split('\n');
+      const structured: StructuredContent[] = [];
+      const breaks: number[] = [0];
+      let currentParagraph = '';
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        if (!line) {
+          if (currentParagraph) {
+            structured.push({ type: 'paragraph', content: currentParagraph });
+            currentParagraph = '';
+          }
+          continue;
+        }
+
+        // Check for page breaks
+        const pageBreakMatch = line.match(/\[PAGE_BREAK_(\d+)\]/);
+        if (pageBreakMatch) {
+          if (currentParagraph) {
+            structured.push({ type: 'paragraph', content: currentParagraph });
+            currentParagraph = '';
+          }
+          // Add a visual separator for the page break
+          structured.push({
+            type: 'paragraph',
+            content: '───────────────────',
+          });
+          breaks.push(structured.length);
+          continue;
+        }
+
+        // Check for headings (more robust regex)
+        const headingMatch = line.match(/^(#{1,6})\s*(.*?)\s*#*$/);
+        if (headingMatch && headingMatch[2]) {
+          if (currentParagraph) {
+            structured.push({ type: 'paragraph', content: currentParagraph });
+            currentParagraph = '';
+          }
+          structured.push({
+            type: 'heading',
+            level: headingMatch[1].length,
+            content: headingMatch[2].trim()
+          });
+        } else {
+          // Accumulate paragraph text
+          currentParagraph += (currentParagraph ? ' ' : '') + line;
+        }
+      }
+
+      if (currentParagraph) {
+        structured.push({ type: 'paragraph', content: currentParagraph });
+      }
+
+      setAllContent(structured);
+      setPageBreaks(breaks);
+    };
+
     extractStructuredText();
   }, [file]);
 
@@ -324,8 +366,29 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
     }
   }, [settings.ttsEnabled]);
 
-  const getAllText = (): string => {
-    return allContent.map(item => item.content).join('\n\n');
+  const getAllText = (fromCurrentPage: boolean = false): string => {
+    let contentToRead = allContent;
+    
+    if (fromCurrentPage && currentPage > 1 && pageBreaks.length >= currentPage) {
+      const startIndex = pageBreaks[currentPage - 1];
+      contentToRead = allContent.slice(startIndex);
+    }
+
+    return contentToRead
+      .filter(item => item.content !== '───────────────────')
+      .map(item => {
+        // Remove markdown formatting for TTS to avoid reading symbols
+        return item.content
+          .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+          .replace(/\*(.*?)\*/g, '$1')     // Italic
+          .replace(/__(.*?)__/g, '$1')     // Bold underscore
+          .replace(/_(.*?)_/g, '$1')      // Italic underscore
+          .replace(/\[PAGE_BREAK_\d+\]/g, '') // Remove any remaining page break markers
+          .replace(/\|/g, ' ')            // Remove pipes from tables
+          .replace(/[-]{3,}/g, ' ')       // Remove long dashes from tables
+          .replace(/[#]{1,6}\s/g, '');    // Remove heading markers if any leaked in
+      })
+      .join('\n\n');
   };
 
   const scrollToPage = (pageNum: number) => {
@@ -387,7 +450,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
       }
 
       // Start playing
-      const documentText = getAllText();
+      const documentText = getAllText(true);
       console.log('Text to read (first 200 chars):', documentText.substring(0, 200));
       console.log('Total text length:', documentText.length);
       
@@ -781,7 +844,12 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
 
             {pageBreaks.length === 1 && (
               <div className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
-                ✓ Accessible Text Mode
+                ✓ Accessible Text Mode {extractionMode === 'ai' ? '(AI Enhanced)' : '(Local)'}
+              </div>
+            )}
+            {pageBreaks.length > 1 && (
+              <div className="text-xs font-medium opacity-70" style={{ color: 'var(--accent)' }}>
+                {extractionMode === 'ai' ? 'AI Enhanced' : 'Local Extraction'}
               </div>
             )}
           </div>
@@ -880,6 +948,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
 
       {/* Text Content */}
       <div 
+        ref={scrollContainerRef}
         className="flex-1 overflow-y-auto"
         style={{
           backgroundColor: getOverlayColor(),
