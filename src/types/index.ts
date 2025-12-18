@@ -127,3 +127,11 @@ export interface UserPreferences {
   defaultView: 'single' | 'double' | 'scroll';
   autoSave: boolean;
 }
+
+export interface ReaderRef {
+  nextPage: () => void;
+  prevPage: () => void;
+  goToPage: (page: number) => void;
+  firstPage: () => void;
+  lastPage: () => void;
+}

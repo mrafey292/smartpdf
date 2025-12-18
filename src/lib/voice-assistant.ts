@@ -52,7 +52,6 @@ export class VoiceAssistant {
         this.recognition.continuous = false;
         this.recognition.interimResults = false;
         this.recognition.lang = 'en-US';
-        this.recognition.maxAlternatives = 1;
         this.setupRecognitionHandlers();
       }
     }
@@ -71,128 +70,54 @@ export class VoiceAssistant {
       this.onListeningChangeCallback?.(false);
     };
 
-    this.recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript.toLowerCase();
+    this.recognition.onresult = async (event: any) => {
+      const transcript = event.results[0][0].transcript;
       const confidence = event.results[0][0].confidence;
       
       console.log('Voice input:', transcript, 'Confidence:', confidence);
       
-      const result = this.parseCommand(transcript, confidence);
-      this.onCommandCallback?.(result);
+      try {
+        const result = await this.parseCommand(transcript, confidence);
+        this.onCommandCallback?.(result);
+      } catch (error) {
+        console.error('Error parsing command:', error);
+        this.onCommandCallback?.({ command: 'unknown', text: transcript, confidence });
+      }
     };
 
     this.recognition.onerror = (event: any) => {
-      // Suppress console errors for network issues (they're handled in UI)
-      if (event.error !== 'network' && event.error !== 'no-speech') {
-        console.error('Speech recognition error:', event.error);
-      }
-      
+      console.error('Speech recognition error:', event.error);
       this.onErrorCallback?.(event.error);
       this.isListening = false;
       this.onListeningChangeCallback?.(false);
-      
-      // Auto-retry for network errors after a delay
-      if (event.error === 'network') {
-        setTimeout(() => {
-          if (!this.isListening) {
-            // Don't auto-retry, let user manually retry
-            // this.startListening();
-          }
-        }, 1000);
-      }
     };
   }
 
-  private parseCommand(text: string, confidence: number): CommandResult {
-    text = text.toLowerCase().trim();
+  private async parseCommand(text: string, confidence: number): Promise<CommandResult> {
+    try {
+      const response = await fetch('/api/parse-command', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
 
-    // Navigation commands
-    if (text.includes('next page') || text.includes('go forward') || text.includes('page forward')) {
-      return { command: 'next-page', text, confidence };
-    }
-    if (text.includes('previous page') || text.includes('go back') || text.includes('page back')) {
-      return { command: 'previous-page', text, confidence };
-    }
-    if (text.includes('first page') || text.includes('go to start') || text.includes('beginning')) {
-      return { command: 'first-page', text, confidence };
-    }
-    if (text.includes('last page') || text.includes('go to end') || text.includes('final page')) {
-      return { command: 'last-page', text, confidence };
-    }
+      if (!response.ok) {
+        throw new Error('Failed to parse command');
+      }
 
-    // Go to specific page
-    const pageMatch = text.match(/(?:go to|jump to|open|show) page (\d+)/);
-    if (pageMatch) {
-      return { command: 'go-to-page', parameters: { pageNumber: parseInt(pageMatch[1]) }, text, confidence };
+      const data = await response.json();
+      return {
+        command: data.command,
+        parameters: data.parameters,
+        text: text,
+        confidence: confidence
+      };
+    } catch (error) {
+      console.error('Error calling parse-command API:', error);
+      return { command: 'unknown', text, confidence };
     }
-
-    // Zoom commands
-    if (text.includes('zoom in') || text.includes('make bigger') || text.includes('enlarge')) {
-      return { command: 'zoom-in', text, confidence };
-    }
-    if (text.includes('zoom out') || text.includes('make smaller') || text.includes('shrink')) {
-      return { command: 'zoom-out', text, confidence };
-    }
-    if (text.includes('reset zoom') || text.includes('normal size') || text.includes('default zoom')) {
-      return { command: 'reset-zoom', text, confidence };
-    }
-
-    // Font size commands
-    if (text.includes('increase font') || text.includes('larger text') || text.includes('bigger text')) {
-      return { command: 'increase-font', text, confidence };
-    }
-    if (text.includes('decrease font') || text.includes('smaller text') || text.includes('reduce font')) {
-      return { command: 'decrease-font', text, confidence };
-    }
-
-    // TTS commands
-    if (text.includes('read aloud') || text.includes('start reading') || text.includes('read this') || text.includes('read document')) {
-      return { command: 'read-aloud', text, confidence };
-    }
-    if (text.includes('stop reading') || text.includes('stop speech')) {
-      return { command: 'stop-reading', text, confidence };
-    }
-    if (text.includes('pause reading') || text.includes('pause speech')) {
-      return { command: 'pause-reading', text, confidence };
-    }
-    if (text.includes('resume reading') || text.includes('continue reading')) {
-      return { command: 'resume-reading', text, confidence };
-    }
-
-    // AI features
-    if (text.includes('summarize') || text.includes('summary') || text.includes('give me a summary')) {
-      return { command: 'summarize', text, confidence };
-    }
-    if (text.includes('open chat') || text.includes('start chat') || text.includes('chat with document')) {
-      return { command: 'chat', text, confidence };
-    }
-
-    // Question asking
-    if (text.startsWith('what') || text.startsWith('how') || text.startsWith('why') || 
-        text.startsWith('when') || text.startsWith('where') || text.startsWith('who')) {
-      return { command: 'ask-question', parameters: { question: text }, text, confidence };
-    }
-
-    // Theme commands
-    if (text.includes('dark mode') || text.includes('dark theme') || text.includes('switch to dark')) {
-      return { command: 'dark-mode', text, confidence };
-    }
-    if (text.includes('light mode') || text.includes('light theme') || text.includes('switch to light')) {
-      return { command: 'light-mode', text, confidence };
-    }
-
-    // View switching
-    if (text.includes('switch view') || text.includes('change view') || text.includes('toggle view') ||
-        text.includes('pdf view') || text.includes('text view') || text.includes('document view')) {
-      return { command: 'switch-view', text, confidence };
-    }
-
-    // Accessibility
-    if (text.includes('accessibility') || text.includes('settings') || text.includes('open settings')) {
-      return { command: 'accessibility', text, confidence };
-    }
-
-    return { command: 'unknown', text, confidence };
   }
 
   public isSupported(): boolean {

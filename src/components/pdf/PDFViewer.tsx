@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import { ReaderRef } from '@/types';
 
 // Set up the worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -26,7 +27,7 @@ interface PDFViewerProps {
   accessibilitySettings: AccessibilitySettings;
 }
 
-export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: PDFViewerProps) {
+export const PDFViewer = forwardRef<ReaderRef, PDFViewerProps>(({ file, onOpenAccessibility, accessibilitySettings }, ref) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
@@ -44,6 +45,20 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
       setCurrentPage(pageNum);
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    nextPage: () => {
+      if (currentPage < numPages) scrollToPage(currentPage + 1);
+    },
+    prevPage: () => {
+      if (currentPage > 1) scrollToPage(currentPage - 1);
+    },
+    goToPage: (page) => {
+      if (page >= 1 && page <= numPages) scrollToPage(page);
+    },
+    firstPage: () => scrollToPage(1),
+    lastPage: () => scrollToPage(numPages),
+  }), [currentPage, numPages]);
 
   function goToPrevPage() {
     if (currentPage > 1) {
@@ -387,4 +402,4 @@ export function PDFViewer({ file, onOpenAccessibility, accessibilitySettings }: 
       </div>
     </div>
   );
-}
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Navbar } from '@/components/ui/Navbar';
@@ -11,6 +11,7 @@ import { SummaryPanel } from '@/components/reader/SummaryPanel';
 import { VoiceAssistant } from '@/components/reader/VoiceAssistant';
 import { getCurrentDocument } from '@/lib/storage';
 import type { CommandResult } from '@/lib/voice-assistant';
+import { ReaderRef } from '@/types';
 
 // Dynamically import PDFViewer to avoid SSR issues with react-pdf
 const PDFViewer = dynamic(() => import('@/components/pdf/PDFViewer').then(mod => ({ default: mod.PDFViewer })), {
@@ -49,6 +50,7 @@ const defaultSettings: AccessibilitySettings = {
 };
 
 export default function ReaderPage() {
+  const readerRef = useRef<ReaderRef>(null);
   const [file, setFile] = useState<File | null>(null);
   const [documentText, setDocumentText] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -195,12 +197,21 @@ export default function ReaderPage() {
     
     switch (result.command) {
       case 'next-page':
+        readerRef.current?.nextPage();
+        break;
       case 'previous-page':
+        readerRef.current?.prevPage();
+        break;
       case 'first-page':
+        readerRef.current?.firstPage();
+        break;
       case 'last-page':
+        readerRef.current?.lastPage();
+        break;
       case 'go-to-page':
-        // These will be handled by the individual viewers through keyboard events simulation
-        // or we can add ref callbacks to control them directly
+        if (result.parameters?.page) {
+          readerRef.current?.goToPage(parseInt(result.parameters.page));
+        }
         break;
       
       case 'summarize':
@@ -401,12 +412,14 @@ export default function ReaderPage() {
       <div className="flex-1 overflow-hidden">
         {viewMode === 'text' ? (
           <TextReader 
+            ref={readerRef}
             file={file}
             settings={settings}
             onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
           />
         ) : viewMode === 'pdf' ? (
           <PDFViewer 
+            ref={readerRef}
             file={file} 
             onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
             accessibilitySettings={settings}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import dynamic from 'next/dynamic';
 import { TextToSpeechService } from '@/lib/tts';
+import { ReaderRef } from '@/types';
 
 // Dynamically import pdfjs to avoid SSR issues
 let pdfjs: any = null;
@@ -47,7 +48,7 @@ interface TextReaderProps {
   onOpenAccessibility: () => void;
 }
 
-export function TextReader({ file, settings, onOpenAccessibility }: TextReaderProps) {
+export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settings, onOpenAccessibility }, ref) => {
   const [allContent, setAllContent] = useState<StructuredContent[]>([]);
   const [pageBreaks, setPageBreaks] = useState<number[]>([]); // Indices where pages start
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -270,6 +271,16 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
       scrollToPage(currentPage + 1);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    nextPage: goToNextPage,
+    prevPage: goToPrevPage,
+    goToPage: (page) => {
+      if (page >= 1 && page <= pageBreaks.length) scrollToPage(page);
+    },
+    firstPage: () => scrollToPage(1),
+    lastPage: () => scrollToPage(pageBreaks.length),
+  }), [currentPage, pageBreaks]);
 
   const handlePlayPause = async () => {
     if (!ttsServiceRef.current || !settings.ttsEnabled) return;
@@ -782,4 +793,4 @@ export function TextReader({ file, settings, onOpenAccessibility }: TextReaderPr
       </div>
     </div>
   );
-}
+});
