@@ -10,10 +10,10 @@ interface VoiceAssistantProps {
 
 export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantProps) {
   const [isListening, setIsListening] = useState(false);
-  const [isAlwaysListening, setIsAlwaysListening] = useState(false);
-  const [isWakeWordDetected, setIsWakeWordDetected] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
   const [lastCommand, setLastCommand] = useState<string>('');
+  const [transcript, setTranscript] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
   const assistantRef = useRef<VoiceAssistantService | null>(null);
 
@@ -23,15 +23,12 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
       
       setIsSupported(assistantRef.current.isSupported());
 
-      // Enable always listening by default
-      assistantRef.current.setAlwaysListening(true);
-      setIsAlwaysListening(true);
-
       assistantRef.current.onCommand((result) => {
         console.log('Command received:', result);
         setLastCommand(result.text);
+        setTranscript('');
+        setIsProcessing(false);
         onCommand(result);
-        setIsWakeWordDetected(false);
         
         // Provide voice feedback
         if (result.command !== 'unknown') {
@@ -41,14 +38,19 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
         }
       });
 
-      assistantRef.current.onListeningChange((listening) => {
-        setIsListening(listening);
+      assistantRef.current.onTranscript((text, isFinal) => {
+        setTranscript(text);
+        if (isFinal) {
+          setIsProcessing(true);
+        }
       });
 
-      assistantRef.current.onWakeWordDetected(() => {
-        setIsWakeWordDetected(true);
-        // Reset after 5 seconds if no command is parsed
-        setTimeout(() => setIsWakeWordDetected(false), 5000);
+      assistantRef.current.onListeningChange((listening) => {
+        setIsListening(listening);
+        if (listening) {
+          setTranscript('');
+          setIsProcessing(false);
+        }
       });
 
       assistantRef.current.onError((error) => {
@@ -96,7 +98,7 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
       <div className="fixed bottom-8 right-8 z-50 flex flex-col items-center gap-4">
         <button
           onClick={() => {
-            if (isListening && !isAlwaysListening) {
+            if (isListening) {
               handleStopListening();
             } else {
               handleStartListening();
@@ -106,10 +108,10 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
           style={{
             width: '64px',
             height: '64px',
-            backgroundColor: isWakeWordDetected ? '#10b981' : (isListening && !isAlwaysListening ? '#ef4444' : 'var(--accent)'),
+            backgroundColor: isListening ? '#ef4444' : 'var(--accent)',
             color: 'white',
-            border: (isListening || isWakeWordDetected) ? '3px solid rgba(255,255,255,0.5)' : 'none',
-            animation: (isListening || isWakeWordDetected) ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
+            border: isListening ? '3px solid rgba(255,255,255,0.5)' : 'none',
+            animation: isListening ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
           }}
           aria-label={isListening ? 'Stop listening' : 'Start voice assistant'}
           title={isListening ? 'Click to stop' : 'Click to speak'}
@@ -140,32 +142,33 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
         </svg>
       </button>
 
-      {/* Listening indicator - Only show when wake word detected or manually listening */}
-      {(isWakeWordDetected || (isListening && !isAlwaysListening)) && (
-        <div className="fixed bottom-32 right-8 z-50 bg-background border border-border rounded-lg shadow-xl p-4 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              <div className={`w-1 h-8 ${isWakeWordDetected ? 'bg-green-500' : 'bg-accent'} animate-pulse`} style={{ animationDelay: '0ms' }}></div>
-              <div className={`w-1 h-8 ${isWakeWordDetected ? 'bg-green-500' : 'bg-accent'} animate-pulse`} style={{ animationDelay: '150ms' }}></div>
-              <div className={`w-1 h-8 ${isWakeWordDetected ? 'bg-green-500' : 'bg-accent'} animate-pulse`} style={{ animationDelay: '300ms' }}></div>
+      {/* Voice Status Overlay */}
+      {(isListening || transcript || isProcessing) && (
+        <div className="fixed bottom-32 right-8 z-50 bg-background border border-border rounded-lg shadow-xl p-4 animate-fade-in min-w-[200px] max-w-[300px]">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              {isListening && (
+                <div className="flex gap-1">
+                  <div className="w-1 h-6 bg-accent animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-1 h-6 bg-accent animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-1 h-6 bg-accent animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {isProcessing ? 'Processing...' : isListening ? 'Listening...' : 'Last command'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                {isWakeWordDetected ? 'Wake word detected!' : 'Listening...'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Speak your command
-              </p>
-            </div>
+            
+            {(transcript || lastCommand) && (
+              <div className="mt-1 p-2 bg-muted/50 rounded border border-border/50">
+                <p className="text-sm italic text-foreground">
+                  &quot;{transcript || lastCommand}&quot;
+                </p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
-
-      {/* Last command display */}
-      {lastCommand && !isListening && (
-        <div className="fixed bottom-32 right-8 z-50 bg-background border border-border rounded-lg shadow-xl p-3 animate-fade-in">
-          <p className="text-xs text-muted-foreground">Last command:</p>
-          <p className="text-sm font-medium text-foreground">&quot;{lastCommand}&quot;</p>
         </div>
       )}
 
@@ -216,10 +219,10 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
                     How to use
                   </h3>
                   <p className="text-sm text-foreground leading-relaxed">
-                    To activate the voice assistant, say <span className="font-bold text-accent">"Smart Reader"</span> followed by your command.
+                    Click the <span className="font-bold text-accent">microphone button</span> and speak your command. The assistant will process your request and execute it automatically.
                   </p>
                   <p className="text-xs text-muted-foreground mt-2 italic">
-                    Example: "Smart Reader, summarize this document"
+                    Example: "Summarize this document"
                   </p>
                 </div>
 
@@ -316,13 +319,6 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
                       <span className="text-xs font-medium px-2 py-1 rounded bg-muted/50 text-muted-foreground">"Open accessibility"</span>
                     </div>
                   </div>
-                </div>
-
-                {/* Usage Tip */}
-                <div className="pt-2">
-                  <p className="text-xs text-muted-foreground italic">
-                    Tip: You can also click the microphone button to speak a command directly without the wake word.
-                  </p>
                 </div>
               </div>
             </div>
