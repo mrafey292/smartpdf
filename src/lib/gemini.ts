@@ -360,7 +360,13 @@ export async function simplifyText(text: string, readingLevel: 'elementary' | 'm
  */
 export async function parseVoiceCommand(text: string) {
   return withRetry(async () => {
-    const model = getGeminiModel();
+    // Use JSON mode to ensure valid JSON output
+    const model = getGenAI().getGenerativeModel({ 
+      model: 'gemini-2.5-flash-lite',
+      generationConfig: {
+        responseMimeType: "application/json",
+      }
+    });
     
     const systemPrompt = `
 You are a voice command parser for a smart document reader application.
@@ -379,13 +385,12 @@ Rules:
 3. If the user wants to chat or open the chat, use 'chat'.
 4. If the user wants a summary, use 'summarize'.
 5. If the input does not match any command clearly, return 'unknown'.
-6. Be flexible with natural language. "Read this for me" -> 'read-aloud'. "Make it bigger" -> 'zoom-in'. "Night mode" -> 'dark-mode'.
+6. Be flexible with natural language. "Read this for me" -> 'read-aloud'. "Make it bigger" -> 'zoom-in'. "Night mode" -> 'dark-mode'. "Next page" -> 'next-page'.
 
-Output Format:
-Return ONLY a valid JSON object. Do not include markdown formatting or explanations.
+Output Format (JSON):
 {
   "command": "one-of-the-commands",
-  "parameters": { ... } // Optional, only for go-to-page or ask-question
+  "parameters": { ... } 
 }
 `;
 
@@ -395,11 +400,22 @@ Return ONLY a valid JSON object. Do not include markdown formatting or explanati
     ]);
 
     const response = await result.response;
-    let jsonString = response.text();
+    let jsonString = response.text().trim();
     
-    // Clean up potential markdown code blocks
-    jsonString = jsonString.replace(/```json\n?|\n?```/g, '').trim();
+    // Robust cleaning for JSON mode
+    if (jsonString.includes('```')) {
+      jsonString = jsonString.replace(/```json\n?|\n?```/g, '').trim();
+    }
     
-    return JSON.parse(jsonString);
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      console.error('Failed to parse Gemini JSON:', jsonString);
+      // Fallback for simple commands if JSON parsing fails
+      const lowerText = text.toLowerCase();
+      if (lowerText.includes('next') && lowerText.includes('page')) return { command: 'next-page' };
+      if (lowerText.includes('previous') && lowerText.includes('page')) return { command: 'previous-page' };
+      throw e;
+    }
   });
 }
