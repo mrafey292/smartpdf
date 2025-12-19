@@ -122,9 +122,9 @@ export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQue
 
   // Handle initial question from voice assistant
   useEffect(() => {
-    if (isOpen && initialQuestion && messages.length === 0) {
-      setInput(initialQuestion);
-      // We don't auto-send to give user a chance to review/edit
+    if (isOpen && initialQuestion && messages.length === 0 && !loading) {
+      // Auto-send the initial question
+      handleSendMessage(initialQuestion);
     }
   }, [isOpen, initialQuestion, messages.length]);
 
@@ -136,8 +136,8 @@ export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQue
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = async () => {
-    const questionToSend = input.trim();
+  const handleSendMessage = async (textOverride?: string) => {
+    const questionToSend = (textOverride || input).trim();
     if (!questionToSend || loading) return;
 
     const userMessage: ChatMessage = {
@@ -314,14 +314,14 @@ export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQue
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
               placeholder="Ask a question about the document..."
               disabled={loading}
               className="flex-1 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all disabled:opacity-50"
               style={{ padding: '0.75rem 1rem' }}
             />
             <button
-              onClick={sendMessage}
+              onClick={() => handleSendMessage()}
               disabled={loading || !input.trim()}
               className="rounded-xl font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-md flex items-center gap-2"
               style={{

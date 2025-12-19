@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { SummaryResponse, AnalysisResponse } from '@/types';
 
 interface SummaryPanelProps {
@@ -179,6 +179,13 @@ export function SummaryPanel({ documentText, cacheName, isOpen, onClose }: Summa
   const [activeTab, setActiveTab] = useState<'summary' | 'analysis'>('summary');
   const [summaryType, setSummaryType] = useState<'brief' | 'detailed' | 'key-points'>('brief');
   const [analysisType, setAnalysisType] = useState<'key-concepts' | 'study-questions'>('key-concepts');
+
+  // Auto-generate summary when panel is opened for the first time
+  useEffect(() => {
+    if (isOpen && summaries.length === 0 && !loading && documentText) {
+      generateSummary();
+    }
+  }, [isOpen, summaries.length, documentText]);
 
   const generateSummary = async () => {
     setLoading(true);

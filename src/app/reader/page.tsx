@@ -62,6 +62,8 @@ export default function ReaderPage() {
   const [viewMode, setViewMode] = useState<'pdf' | 'docx' | 'text'>('text'); // Default to text mode for accessibility
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [commandInput, setCommandInput] = useState('');
+  const [isProcessingCommand, setIsProcessingCommand] = useState(false);
   const router = useRouter();
 
   // Extract text using AI for better structure and accuracy
@@ -265,6 +267,30 @@ export default function ReaderPage() {
   const handleSettingsChange = (newSettings: AccessibilitySettings) => {
     setSettings(newSettings);
     localStorage.setItem('accessibilitySettings', JSON.stringify(newSettings));
+  };
+
+  const handleCommandSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commandInput.trim() || isProcessingCommand) return;
+
+    try {
+      setIsProcessingCommand(true);
+      const response = await fetch('/api/parse-command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: commandInput }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        handleVoiceCommand(result);
+        setCommandInput('');
+      }
+    } catch (error) {
+      console.error('Error processing command:', error);
+    } finally {
+      setIsProcessingCommand(false);
+    }
   };
 
   // Voice command handler
@@ -569,6 +595,36 @@ export default function ReaderPage() {
         onCommand={handleVoiceCommand}
         isEnabled={true}
       />
+
+      {/* Debug/Test Command Bar */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+        <form 
+          onSubmit={handleCommandSubmit}
+          className="relative group"
+        >
+          <input
+            type="text"
+            value={commandInput}
+            onChange={(e) => setCommandInput(e.target.value)}
+            placeholder="Type a command (e.g. 'next page', 'summarize')..."
+            className="w-full bg-background/80 backdrop-blur-md border border-border rounded-full py-3 pl-6 pr-12 shadow-xl focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+            disabled={isProcessingCommand}
+          />
+          <button
+            type="submit"
+            disabled={isProcessingCommand || !commandInput.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-accent text-white disabled:opacity-50 disabled:bg-muted transition-colors"
+          >
+            {isProcessingCommand ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            )}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
