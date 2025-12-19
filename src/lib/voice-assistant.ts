@@ -39,6 +39,8 @@ export class VoiceAssistant {
   private isAlwaysListening: boolean = false;
   private isWaitingForCommand: boolean = false;
   private wakeWord: string = 'smart reader';
+  private lastProcessedIndex: number = -1;
+  private commandTimeout: any = null;
   private onCommandCallback?: (result: CommandResult) => void;
   private onListeningChangeCallback?: (isListening: boolean) => void;
   private onWakeWordDetectedCallback?: () => void;
@@ -83,41 +85,54 @@ export class VoiceAssistant {
     };
 
     this.recognition.onresult = async (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
+        // Skip if we've already processed this final result
+        if (i <= this.lastProcessedIndex && event.results[i].isFinal) continue;
 
-      const transcript = (finalTranscript || interimTranscript).toLowerCase();
-      
-      // State 1: Waiting for Wake Word
-      if (!this.isWaitingForCommand) {
-        if (transcript.includes(this.wakeWord)) {
-          console.log('Wake word detected!');
-          this.isWaitingForCommand = true;
-          this.onWakeWordDetectedCallback?.();
-          
-          // Play a subtle beep sound
-          this.playNotificationSound();
+        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+        const isFinal = event.results[i].isFinal;
 
-          // If there's more text after the wake word in the same result, process it
-          const commandAfterWake = transcript.split(this.wakeWord).pop()?.trim();
-          if (commandAfterWake && finalTranscript) {
-            this.processCommand(commandAfterWake, event.results[event.results.length - 1][0].confidence);
+        // State 1: Waiting for Wake Word
+        if (!this.isWaitingForCommand) {
+          if (transcript.includes(this.wakeWord)) {
+            this.isWaitingForCommand = true;
+            this.onWakeWordDetectedCallback?.();
+            this.playNotificationSound();
+
+            // Set a timeout to reset if no command follows
+            if (this.commandTimeout) clearTimeout(this.commandTimeout);
+            this.commandTimeout = setTimeout(() => {
+              this.isWaitingForCommand = false;
+            }, 8000);
+
+            // Check if the command is in the same result
+            const parts = transcript.split(this.wakeWord);
+            const commandAfter = parts[parts.length - 1].trim();
+            
+            if (commandAfter && isFinal) {
+              this.lastProcessedIndex = i;
+              if (this.commandTimeout) clearTimeout(this.commandTimeout);
+              await this.processCommand(commandAfter, event.results[i][0].confidence);
+            }
           }
-        }
-      } 
-      // State 2: Waiting for Command after Wake Word
-      else if (finalTranscript) {
-        const commandText = finalTranscript.trim();
-        if (commandText) {
-          this.processCommand(commandText, event.results[event.results.length - 1][0].confidence);
+        } 
+        // State 2: Waiting for Command after Wake Word
+        else if (isFinal) {
+          this.lastProcessedIndex = i;
+          
+          // If the transcript is just the wake word, ignore it and keep waiting for the command
+          if (transcript === this.wakeWord) {
+            continue;
+          }
+
+          if (this.commandTimeout) clearTimeout(this.commandTimeout);
+          
+          if (transcript) {
+            await this.processCommand(transcript, event.results[i][0].confidence);
+          } else {
+            // Only reset if it's truly empty
+            this.isWaitingForCommand = false;
+          }
         }
       }
     };
@@ -133,7 +148,10 @@ export class VoiceAssistant {
 
   private async processCommand(text: string, confidence: number) {
     // Don't process if it's just the wake word again
-    if (text.toLowerCase() === this.wakeWord) return;
+    if (text.toLowerCase() === this.wakeWord) {
+      this.isWaitingForCommand = false;
+      return;
+    }
 
     try {
       const result = await this.parseCommand(text, confidence);
