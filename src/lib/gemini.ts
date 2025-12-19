@@ -354,3 +354,52 @@ export async function simplifyText(text: string, readingLevel: 'elementary' | 'm
     return response.text();
   });
 }
+
+/**
+ * Parse a voice command into a structured action
+ */
+export async function parseVoiceCommand(text: string) {
+  return withRetry(async () => {
+    const model = getGeminiModel();
+    
+    const systemPrompt = `
+You are a voice command parser for a smart document reader application.
+Your task is to map the user's spoken input to one of the predefined commands.
+
+Available Commands:
+- Navigation: 'next-page', 'previous-page', 'first-page', 'last-page', 'go-to-page'
+- Zoom: 'zoom-in', 'zoom-out', 'reset-zoom'
+- Reading (TTS): 'read-aloud', 'stop-reading', 'pause-reading', 'resume-reading'
+- Appearance: 'increase-font', 'decrease-font', 'dark-mode', 'light-mode', 'switch-view'
+- AI/Tools: 'summarize', 'chat', 'ask-question', 'accessibility'
+
+Rules:
+1. If the user asks to go to a specific page (e.g., "page 5", "jump to 10"), use 'go-to-page' and extract the 'pageNumber' parameter (integer).
+2. If the user asks a question about the content (e.g., "what is this about?", "explain the first paragraph"), use 'ask-question' and extract the 'question' parameter (string).
+3. If the user wants to chat or open the chat, use 'chat'.
+4. If the user wants a summary, use 'summarize'.
+5. If the input does not match any command clearly, return 'unknown'.
+6. Be flexible with natural language. "Read this for me" -> 'read-aloud'. "Make it bigger" -> 'zoom-in'. "Night mode" -> 'dark-mode'.
+
+Output Format:
+Return ONLY a valid JSON object. Do not include markdown formatting or explanations.
+{
+  "command": "one-of-the-commands",
+  "parameters": { ... } // Optional, only for go-to-page or ask-question
+}
+`;
+
+    const result = await model.generateContent([
+      systemPrompt,
+      `User Input: "${text}"`
+    ]);
+
+    const response = await result.response;
+    let jsonString = response.text();
+    
+    // Clean up potential markdown code blocks
+    jsonString = jsonString.replace(/```json\n?|\n?```/g, '').trim();
+    
+    return JSON.parse(jsonString);
+  });
+}
