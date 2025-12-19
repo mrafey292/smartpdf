@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { extractStructuredText } from '@/lib/gemini';
+import { extractStructuredText, createDocumentCache } from '@/lib/gemini';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,9 +25,14 @@ export async function POST(request: NextRequest) {
     // Call Gemini to extract structured text
     const structuredText = await extractStructuredText(base64, mimeType);
 
+    // Create a context cache for future requests (Chat, Summary, etc.)
+    // This fulfills the "send only once" requirement for large documents
+    const cacheName = await createDocumentCache(structuredText);
+
     return NextResponse.json({
       success: true,
       text: structuredText,
+      cacheName: cacheName,
       timestamp: Date.now()
     });
 

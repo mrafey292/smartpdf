@@ -53,6 +53,7 @@ export default function ReaderPage() {
   const readerRef = useRef<ReaderRef>(null);
   const [file, setFile] = useState<File | null>(null);
   const [documentText, setDocumentText] = useState<string>('');
+  const [cacheName, setCacheName] = useState<string | undefined>(undefined);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInitialQuestion, setChatInitialQuestion] = useState<string | undefined>(undefined);
@@ -65,6 +66,8 @@ export default function ReaderPage() {
 
   // Extract text using AI for better structure and accuracy
   const extractTextWithAI = async (file: File) => {
+    if (isExtracting) return; // Prevent multiple simultaneous extractions
+    
     try {
       setIsExtracting(true);
       const formData = new FormData();
@@ -83,9 +86,10 @@ export default function ReaderPage() {
       // Strip page markers for the general document text used in chat/summary
       const cleanText = data.text.replace(/\[PAGE_BREAK_\d+\]/g, '');
       setDocumentText(cleanText);
+      setCacheName(data.cacheName);
       
-      // Save the extracted text to IndexedDB so we don't have to call the API again
-      await updateExtractedText(data.text);
+      // Save the extracted text and cache name to IndexedDB so we don't have to call the API again
+      await updateExtractedText(data.text, data.cacheName);
     } catch (error) {
       console.error('Error extracting text with AI:', error);
       // Fallback to local extraction
@@ -165,11 +169,15 @@ export default function ReaderPage() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     // Get file from IndexedDB
     const loadDocument = async () => {
       try {
         const storedDoc = await getCurrentDocument();
         
+        if (!isMounted) return;
+
         if (storedDoc) {
           // Reconstruct the file from ArrayBuffer
           const blob = new Blob([storedDoc.data], { type: storedDoc.type });
@@ -180,6 +188,7 @@ export default function ReaderPage() {
           if (storedDoc.extractedText) {
             const cleanText = storedDoc.extractedText.replace(/\[PAGE_BREAK_\d+\]/g, '');
             setDocumentText(cleanText);
+            setCacheName(storedDoc.cacheName);
           } else {
             // Extract text using AI
             await extractTextWithAI(reconstructedFile);
@@ -198,7 +207,7 @@ export default function ReaderPage() {
         }
       } catch (error) {
         console.error('Error loading document:', error);
-        router.push('/');
+        if (isMounted) router.push('/');
       }
     };
 
@@ -233,7 +242,10 @@ export default function ReaderPage() {
       attributeFilter: ['class', 'data-theme']
     });
 
-    return () => observer.disconnect();
+    return () => {
+      isMounted = false;
+      observer.disconnect();
+    };
   }, [router]);
 
   // Apply theme when settings change
@@ -518,6 +530,7 @@ export default function ReaderPage() {
             file={file}
             settings={settings}
             onOpenAccessibility={() => setIsSidebarOpen(prev => !prev)}
+            onSettingsChange={handleSettingsChange}
           />
         ) : viewMode === 'pdf' ? (
           <PDFViewer 
@@ -538,6 +551,7 @@ export default function ReaderPage() {
       />
       <ChatPanel
         documentText={documentText || 'Loading document...'}
+        cacheName={cacheName}
         isOpen={isChatOpen}
         onClose={() => {
           setIsChatOpen(false);
@@ -547,6 +561,7 @@ export default function ReaderPage() {
       />
       <SummaryPanel
         documentText={documentText || 'Loading document...'}
+        cacheName={cacheName}
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
       />

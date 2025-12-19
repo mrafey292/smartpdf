@@ -14,24 +14,25 @@ interface ChatRequest {
   documentText: string;
   question: string;
   conversationHistory?: ChatMessage[];
+  cacheName?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
     
-    const { documentText, question, conversationHistory = [] } = body;
+    const { documentText, question, conversationHistory = [], cacheName } = body;
 
     // Validate input
-    if (!documentText || !question) {
+    if ((!documentText && !cacheName) || !question) {
       return NextResponse.json(
-        { error: 'Missing required fields: documentText and question' },
+        { error: 'Missing required fields: (documentText or cacheName) and question' },
         { status: 400 }
       );
     }
 
     // Validate document text length (Gemini has token limits)
-    if (documentText.length > 100000) {
+    if (documentText && documentText.length > 100000) {
       return NextResponse.json(
         { error: 'Document text is too long. Please provide a shorter excerpt.' },
         { status: 400 }
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     }));
 
     // Get response from Gemini
-    const answer = await chatWithDocument(documentText, question, formattedHistory);
+    const answer = await chatWithDocument(documentText, question, formattedHistory, cacheName);
 
     return NextResponse.json({
       success: true,

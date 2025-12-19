@@ -23,6 +23,10 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
       
       setIsSupported(assistantRef.current.isSupported());
 
+      // Enable always listening by default
+      assistantRef.current.setAlwaysListening(true);
+      setIsAlwaysListening(true);
+
       assistantRef.current.onCommand((result) => {
         console.log('Command received:', result);
         setLastCommand(result.text);
@@ -59,6 +63,17 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
     };
   }, []);
 
+  // Handle Escape key to close panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showPanel) {
+        setShowPanel(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showPanel]);
+
   const handleStartListening = () => {
     if (assistantRef.current) {
       assistantRef.current.startListening();
@@ -71,14 +86,6 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
     }
   };
 
-  const toggleAlwaysListening = () => {
-    if (assistantRef.current) {
-      const newState = !isAlwaysListening;
-      setIsAlwaysListening(newState);
-      assistantRef.current.setAlwaysListening(newState);
-    }
-  };
-
   if (!isEnabled || !isSupported) {
     return null;
   }
@@ -87,27 +94,9 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
     <>
       {/* Floating Voice Button */}
       <div className="fixed bottom-8 right-8 z-50 flex flex-col items-center gap-4">
-        {/* Always Listening Toggle */}
-        <button
-          onClick={toggleAlwaysListening}
-          className={`rounded-full shadow-lg transition-all duration-300 flex items-center justify-center ${
-            isAlwaysListening ? 'bg-accent text-white' : 'bg-muted text-muted-foreground'
-          }`}
-          style={{
-            width: '40px',
-            height: '40px',
-            border: '1px solid var(--border)',
-          }}
-          title={isAlwaysListening ? 'Disable Always Listening' : 'Enable Always Listening ("Smart Reader")'}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-        </button>
-
         <button
           onClick={() => {
-            if (isListening) {
+            if (isListening && !isAlwaysListening) {
               handleStopListening();
             } else {
               handleStartListening();
@@ -117,7 +106,7 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
           style={{
             width: '64px',
             height: '64px',
-            backgroundColor: isWakeWordDetected ? '#10b981' : (isListening ? '#ef4444' : 'var(--accent)'),
+            backgroundColor: isWakeWordDetected ? '#10b981' : (isListening && !isAlwaysListening ? '#ef4444' : 'var(--accent)'),
             color: 'white',
             border: (isListening || isWakeWordDetected) ? '3px solid rgba(255,255,255,0.5)' : 'none',
             animation: (isListening || isWakeWordDetected) ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
@@ -151,8 +140,8 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
         </svg>
       </button>
 
-      {/* Listening indicator */}
-      {(isListening || isAlwaysListening) && (
+      {/* Listening indicator - Only show when wake word detected or manually listening */}
+      {(isWakeWordDetected || (isListening && !isAlwaysListening)) && (
         <div className="fixed bottom-32 right-8 z-50 bg-background border border-border rounded-lg shadow-xl p-4 animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="flex gap-1">
@@ -162,10 +151,10 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">
-                {isWakeWordDetected ? 'Wake word detected!' : (isAlwaysListening ? 'Waiting for "Smart Reader"...' : 'Listening...')}
+                {isWakeWordDetected ? 'Wake word detected!' : 'Listening...'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {isWakeWordDetected ? 'Speak your command' : (isAlwaysListening ? 'Say "Smart Reader" to start' : 'Speak your command')}
+                Speak your command
               </p>
             </div>
           </div>
@@ -218,6 +207,22 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
             {/* Content */}
             <div style={{ padding: '1.5rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                {/* Activation */}
+                <div className="p-4 rounded-lg bg-accent/5 border border-accent/20">
+                  <h3 className="text-sm font-bold text-accent mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    </svg>
+                    How to use
+                  </h3>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    To activate the voice assistant, say <span className="font-bold text-accent">"Smart Reader"</span> followed by your command.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2 italic">
+                    Example: "Smart Reader, summarize this document"
+                  </p>
+                </div>
+
                 {/* Navigation */}
                 <div>
                   <h3 className="text-base font-semibold text-foreground mb-4">Navigation</h3>
@@ -316,7 +321,7 @@ export function VoiceAssistant({ onCommand, isEnabled = true }: VoiceAssistantPr
                 {/* Usage Tip */}
                 <div className="pt-2">
                   <p className="text-xs text-muted-foreground italic">
-                    Tip: Click the microphone button and speak naturally to execute commands.
+                    Tip: You can also click the microphone button to speak a command directly without the wake word.
                   </p>
                 </div>
               </div>

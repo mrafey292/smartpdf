@@ -11,6 +11,7 @@ interface StoredDocument {
   type: string;
   uploadedAt: Date;
   extractedText?: string;
+  cacheName?: string;
 }
 
 /**
@@ -82,13 +83,16 @@ export async function getCurrentDocument(): Promise<StoredDocument | null> {
 /**
  * Update the extracted text for the current document
  */
-export async function updateExtractedText(text: string): Promise<void> {
+export async function updateExtractedText(text: string, cacheName?: string): Promise<void> {
   const db = await openDB();
   const doc = await getCurrentDocument();
   
   if (!doc) return;
 
   doc.extractedText = text;
+  if (cacheName) {
+    doc.cacheName = cacheName;
+  }
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readwrite');

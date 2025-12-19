@@ -8,24 +8,25 @@ interface AnalyzeRequest {
   documentText: string;
   analysisType: 'key-concepts' | 'study-questions';
   questionCount?: number; // For study-questions type
+  cacheName?: string;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: AnalyzeRequest = await request.json();
     
-    const { documentText, analysisType, questionCount = 5 } = body;
+    const { documentText, analysisType, questionCount = 5, cacheName } = body;
 
     // Validate input
-    if (!documentText || !analysisType) {
+    if ((!documentText && !cacheName) || !analysisType) {
       return NextResponse.json(
-        { error: 'Missing required fields: documentText and analysisType' },
+        { error: 'Missing required fields: (documentText or cacheName) and analysisType' },
         { status: 400 }
       );
     }
 
     // Validate document text length
-    if (documentText.length > 100000) {
+    if (documentText && documentText.length > 100000) {
       return NextResponse.json(
         { error: 'Document text is too long. Please provide a shorter excerpt.' },
         { status: 400 }
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     switch (analysisType) {
       case 'key-concepts':
-        result = await extractKeyConcepts(documentText);
+        result = await extractKeyConcepts(documentText, cacheName);
         break;
       
       case 'study-questions':
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        result = await generateStudyQuestions(documentText, questionCount);
+        result = await generateStudyQuestions(documentText, questionCount, cacheName);
         break;
       
       default:

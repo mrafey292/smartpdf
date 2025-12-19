@@ -139,6 +139,12 @@ export const PDFViewer = forwardRef<ReaderRef, PDFViewerProps>(({ file, onOpenAc
           e.preventDefault();
           setShowShortcuts(prev => !prev);
           break;
+        case 'Escape':
+          if (showShortcuts) {
+            e.preventDefault();
+            setShowShortcuts(false);
+          }
+          break;
       }
     };
 

@@ -108,12 +108,13 @@ function FormattedMessage({ text }: { text: string }) {
 
 interface ChatPanelProps {
   documentText: string;
+  cacheName?: string;
   isOpen: boolean;
   onClose: () => void;
   initialQuestion?: string;
 }
 
-export function ChatPanel({ documentText, isOpen, onClose, initialQuestion }: ChatPanelProps) {
+export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQuestion }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -125,7 +126,7 @@ export function ChatPanel({ documentText, isOpen, onClose, initialQuestion }: Ch
       setInput(initialQuestion);
       // We don't auto-send to give user a chance to review/edit
     }
-  }, [isOpen, initialQuestion]);
+  }, [isOpen, initialQuestion, messages.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -136,12 +137,13 @@ export function ChatPanel({ documentText, isOpen, onClose, initialQuestion }: Ch
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+    const questionToSend = input.trim();
+    if (!questionToSend || loading) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      text: input,
+      text: questionToSend,
       timestamp: Date.now()
     };
 
@@ -154,8 +156,9 @@ export function ChatPanel({ documentText, isOpen, onClose, initialQuestion }: Ch
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentText,
-          question: input,
+          documentText: cacheName ? undefined : documentText,
+          cacheName,
+          question: questionToSend,
           conversationHistory: messages
         })
       });

@@ -1,36 +1,96 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleAICacheManager } from '@google/generative-ai/server';
 
 // Lazy initialization to avoid build-time errors
 let genAI: GoogleGenerativeAI | null = null;
+let cacheManager: GoogleAICacheManager | null = null;
 
 function getGenAI() {
   if (!genAI) {
     const apiKey = process.env.GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY is not set in environment variables');
-    }
-    
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
     genAI = new GoogleGenerativeAI(apiKey);
   }
-  
   return genAI;
+}
+
+function getCacheManager() {
+  if (!cacheManager) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+    cacheManager = new GoogleAICacheManager(apiKey);
+  }
+  return cacheManager;
 }
 
 /**
  * Get Gemini model for text generation
- * Using gemini-2.5-flash-lite for fast responses, good for chat
  */
 export function getGeminiModel(modelName: string = 'gemini-2.5-flash-lite') {
   return getGenAI().getGenerativeModel({ model: modelName });
 }
 
 /**
- * Get Gemini Pro model for more complex tasks
- * Using gemini-2.5-flash-lite for better quality responses
+ * Get Gemini Pro model
  */
 export function getGeminiProModel() {
   return getGenAI().getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+}
+
+/**
+ * Create or retrieve a context cache for a document.
+ * This allows us to send the document once and refer to it by name in future calls.
+ * Note: Context caching requires a minimum of 32,768 tokens.
+ * For smaller documents, we'll return the standard model.
+ */
+export async function getModelWithCaching(text: string, cacheName?: string) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+
+  // If we already have a cache name, try to use it
+  if (cacheName) {
+    try {
+      return getGenAI().getGenerativeModelFromCachedContent({
+        name: cacheName,
+      } as any);
+    } catch (error) {
+      console.warn('Failed to use existing cache, falling back to standard model:', error);
+    }
+  }
+
+  // Estimate token count (rough approximation: 1 token ~= 4 chars)
+  const estimatedTokens = text.length / 4;
+
+  // Gemini Context Caching requires at least 32k tokens
+  if (estimatedTokens > 32768) {
+    try {
+      const manager = getCacheManager();
+      const cache = await manager.create({
+        model: 'models/gemini-1.5-flash-001', // Use 1.5 Flash for caching support
+        displayName: 'document-context',
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text }],
+          },
+        ],
+        ttlSeconds: 3600, // 1 hour cache
+      });
+      
+      return {
+        model: getGenAI().getGenerativeModelFromCachedContent(cache),
+        cacheName: cache.name
+      };
+    } catch (error) {
+      console.error('Error creating context cache:', error);
+    }
+  }
+
+  // Fallback to standard model if text is too small or caching fails
+  return {
+    model: getGeminiModel(),
+    cacheName: undefined
+  };
 }
 
 /**
@@ -50,30 +110,75 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
 }
 
 /**
+ * Create a context cache for a document.
+ * This allows us to send the document once and refer to it by name in future calls.
+ * Note: Context caching requires a minimum of 32,768 tokens.
+ */
+export async function createDocumentCache(text: string) {
+  // Estimate token count (rough approximation: 1 token ~= 4 chars)
+  const estimatedTokens = text.length / 4;
+
+  // Gemini Context Caching requires at least 32k tokens
+  if (estimatedTokens > 32768) {
+    try {
+      const manager = getCacheManager();
+      const cache = await manager.create({
+        model: 'models/gemini-1.5-flash-001',
+        displayName: 'document-context',
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text }],
+          },
+        ],
+        ttlSeconds: 3600, // 1 hour cache
+      });
+      return cache.name;
+    } catch (error) {
+      console.error('Error creating context cache:', error);
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Chat with document context
  */
 export async function chatWithDocument(
   documentText: string,
   question: string,
-  conversationHistory: Array<{ role: string; text: string }> = []
+  conversationHistory: Array<{ role: string; text: string }> = [],
+  cacheName?: string
 ) {
   return withRetry(async () => {
-    const model = getGeminiModel();
-    
-    // Build context with document and conversation history
-    let contextPrompt = `You are an AI assistant helping users understand a document. Here is the document content:\n\n${documentText}\n\n`;
-    
-    if (conversationHistory.length > 0) {
-      contextPrompt += "Previous conversation:\n";
-      conversationHistory.forEach(msg => {
-        contextPrompt += `${msg.role}: ${msg.text}\n`;
-      });
-      contextPrompt += "\n";
+    let model;
+    let prompt = '';
+
+    if (cacheName) {
+      try {
+        model = getGenAI().getGenerativeModelFromCachedContent({ name: cacheName } as any);
+        prompt = `User question: ${question}\n\nProvide a helpful, accurate answer based on the document content.`;
+      } catch (error) {
+        console.warn('Cache failed, falling back to standard model');
+        model = getGeminiModel();
+        prompt = `You are an AI assistant helping users understand a document. Here is the document content:\n\n${documentText}\n\nUser question: ${question}`;
+      }
+    } else {
+      model = getGeminiModel();
+      prompt = `You are an AI assistant helping users understand a document. Here is the document content:\n\n${documentText}\n\nUser question: ${question}`;
     }
     
-    contextPrompt += `User question: ${question}\n\nProvide a helpful, accurate answer based on the document content. If the answer is not in the document, say so.`;
+    // Add history if present
+    if (conversationHistory.length > 0) {
+      let historyText = "\nPrevious conversation:\n";
+      conversationHistory.forEach(msg => {
+        historyText += `${msg.role}: ${msg.text}\n`;
+      });
+      prompt = historyText + prompt;
+    }
 
-    const result = await model.generateContent(contextPrompt);
+    const result = await model.generateContent(prompt);
     const response = await result.response;
     return response.text();
   });
@@ -84,22 +189,35 @@ export async function chatWithDocument(
  */
 export async function summarizeDocument(
   documentText: string,
-  summaryType: 'brief' | 'detailed' | 'key-points' = 'brief'
+  summaryType: 'brief' | 'detailed' | 'key-points' = 'brief',
+  cacheName?: string
 ) {
   return withRetry(async () => {
-    const model = getGeminiProModel();
+    let model;
+    let promptPrefix = '';
+
+    if (cacheName) {
+      try {
+        model = getGenAI().getGenerativeModelFromCachedContent({ name: cacheName } as any);
+      } catch (error) {
+        model = getGeminiProModel();
+        promptPrefix = `Document content:\n\n${documentText}\n\n`;
+      }
+    } else {
+      model = getGeminiProModel();
+      promptPrefix = `Document content:\n\n${documentText}\n\n`;
+    }
     
     let prompt = '';
-    
     switch (summaryType) {
       case 'brief':
-        prompt = `Provide a brief 2-3 sentence summary of the following document:\n\n${documentText}`;
+        prompt = `${promptPrefix}Provide a brief 2-3 sentence summary of the document.`;
         break;
       case 'detailed':
-        prompt = `Provide a detailed summary of the following document, covering all main points and important details:\n\n${documentText}`;
+        prompt = `${promptPrefix}Provide a detailed summary of the document, covering all main points and important details.`;
         break;
       case 'key-points':
-        prompt = `Extract and list the key points from the following document in bullet points:\n\n${documentText}`;
+        prompt = `${promptPrefix}Extract and list the key points from the document in bullet points.`;
         break;
     }
 
@@ -112,11 +230,23 @@ export async function summarizeDocument(
 /**
  * Extract key concepts from document
  */
-export async function extractKeyConcepts(documentText: string) {
+export async function extractKeyConcepts(documentText: string, cacheName?: string) {
   return withRetry(async () => {
-    const model = getGeminiModel();
-    
-    const prompt = `Analyze the following document and extract the main concepts, topics, and themes. Format as a list:\n\n${documentText}`;
+    let model;
+    let prompt = '';
+
+    if (cacheName) {
+      try {
+        model = getGenAI().getGenerativeModelFromCachedContent({ name: cacheName } as any);
+        prompt = `Analyze the document and extract the main concepts, topics, and themes. Format as a list.`;
+      } catch (error) {
+        model = getGeminiModel();
+        prompt = `Analyze the following document and extract the main concepts, topics, and themes. Format as a list:\n\n${documentText}`;
+      }
+    } else {
+      model = getGeminiModel();
+      prompt = `Analyze the following document and extract the main concepts, topics, and themes. Format as a list:\n\n${documentText}`;
+    }
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -180,11 +310,23 @@ export async function explainAccessibility(documentText: string, feature: string
 /**
  * Generate study questions from document
  */
-export async function generateStudyQuestions(documentText: string, count: number = 5) {
+export async function generateStudyQuestions(documentText: string, count: number = 5, cacheName?: string) {
   return withRetry(async () => {
-    const model = getGeminiModel();
-    
-    const prompt = `Based on the following document, generate ${count} thought-provoking study questions that would help a student understand the material better:\n\n${documentText}`;
+    let model;
+    let prompt = '';
+
+    if (cacheName) {
+      try {
+        model = getGenAI().getGenerativeModelFromCachedContent({ name: cacheName } as any);
+        prompt = `Generate ${count} study questions based on the document to help a student test their knowledge. Include answers.`;
+      } catch (error) {
+        model = getGeminiModel();
+        prompt = `Generate ${count} study questions based on the following document to help a student test their knowledge. Include answers:\n\n${documentText}`;
+      }
+    } else {
+      model = getGeminiModel();
+      prompt = `Generate ${count} study questions based on the following document to help a student test their knowledge. Include answers:\n\n${documentText}`;
+    }
 
     const result = await model.generateContent(prompt);
     const response = await result.response;

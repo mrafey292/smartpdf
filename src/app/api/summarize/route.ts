@@ -9,6 +9,7 @@ interface SummarizeRequest {
   summaryType?: 'brief' | 'detailed' | 'key-points';
   simplify?: boolean;
   readingLevel?: 'elementary' | 'middle-school' | 'high-school';
+  cacheName?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -19,19 +20,20 @@ export async function POST(request: NextRequest) {
       documentText, 
       summaryType = 'brief',
       simplify = false,
-      readingLevel = 'high-school'
+      readingLevel = 'high-school',
+      cacheName
     } = body;
 
     // Validate input
-    if (!documentText) {
+    if (!documentText && !cacheName) {
       return NextResponse.json(
-        { error: 'Missing required field: documentText' },
+        { error: 'Missing required field: documentText or cacheName' },
         { status: 400 }
       );
     }
 
     // Validate document text length
-    if (documentText.length > 100000) {
+    if (documentText && documentText.length > 100000) {
       return NextResponse.json(
         { error: 'Document text is too long. Please provide a shorter excerpt.' },
         { status: 400 }
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate summary
-    let summary = await summarizeDocument(documentText, summaryType);
+    let summary = await summarizeDocument(documentText, summaryType, cacheName);
 
     // Optionally simplify the summary for accessibility
     if (simplify) {

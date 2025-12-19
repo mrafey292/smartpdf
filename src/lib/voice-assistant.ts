@@ -37,6 +37,7 @@ export class VoiceAssistant {
   private synthesis: SpeechSynthesis | null = null;
   private isListening: boolean = false;
   private isAlwaysListening: boolean = false;
+  private isWaitingForCommand: boolean = false;
   private wakeWord: string = 'smart reader';
   private onCommandCallback?: (result: CommandResult) => void;
   private onListeningChangeCallback?: (isListening: boolean) => void;
@@ -51,8 +52,8 @@ export class VoiceAssistant {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         this.recognition = new SpeechRecognition();
-        this.recognition.continuous = false;
-        this.recognition.interimResults = true; // Enable interim results for wake word detection
+        this.recognition.continuous = true; // Always continuous for wake word
+        this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
         this.setupRecognitionHandlers();
       }
@@ -76,7 +77,7 @@ export class VoiceAssistant {
         try {
           this.recognition.start();
         } catch (e) {
-          console.error('Failed to restart recognition:', e);
+          // Ignore errors if already started
         }
       }
     };
@@ -95,42 +96,74 @@ export class VoiceAssistant {
 
       const transcript = (finalTranscript || interimTranscript).toLowerCase();
       
-      // Wake word detection
-      if (transcript.includes(this.wakeWord)) {
-        console.log('Wake word detected!');
-        this.onWakeWordDetectedCallback?.();
-        
-        // If it's a final result and contains more than just the wake word, parse it
-        if (finalTranscript) {
-          const commandText = finalTranscript.toLowerCase().split(this.wakeWord).pop()?.trim();
-          if (commandText) {
-            const confidence = event.results[event.results.length - 1][0].confidence;
-            try {
-              const result = await this.parseCommand(commandText, confidence);
-              this.onCommandCallback?.(result);
-            } catch (error) {
-              console.error('Error parsing command:', error);
-            }
+      // State 1: Waiting for Wake Word
+      if (!this.isWaitingForCommand) {
+        if (transcript.includes(this.wakeWord)) {
+          console.log('Wake word detected!');
+          this.isWaitingForCommand = true;
+          this.onWakeWordDetectedCallback?.();
+          
+          // Play a subtle beep sound
+          this.playNotificationSound();
+
+          // If there's more text after the wake word in the same result, process it
+          const commandAfterWake = transcript.split(this.wakeWord).pop()?.trim();
+          if (commandAfterWake && finalTranscript) {
+            this.processCommand(commandAfterWake, event.results[event.results.length - 1][0].confidence);
           }
         }
-      } else if (finalTranscript && !this.isAlwaysListening) {
-        // If not in always listening mode, parse any final transcript
-        const confidence = event.results[event.results.length - 1][0].confidence;
-        try {
-          const result = await this.parseCommand(finalTranscript, confidence);
-          this.onCommandCallback?.(result);
-        } catch (error) {
-          console.error('Error parsing command:', error);
+      } 
+      // State 2: Waiting for Command after Wake Word
+      else if (finalTranscript) {
+        const commandText = finalTranscript.trim();
+        if (commandText) {
+          this.processCommand(commandText, event.results[event.results.length - 1][0].confidence);
         }
       }
     };
 
     this.recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
+      if (event.error === 'no-speech' && this.isAlwaysListening) {
+        return; // Ignore no-speech errors in always listening mode
+      }
       this.onErrorCallback?.(event.error);
-      this.isListening = false;
-      this.onListeningChangeCallback?.(false);
     };
+  }
+
+  private async processCommand(text: string, confidence: number) {
+    // Don't process if it's just the wake word again
+    if (text.toLowerCase() === this.wakeWord) return;
+
+    try {
+      const result = await this.parseCommand(text, confidence);
+      this.onCommandCallback?.(result);
+    } catch (error) {
+      console.error('Error parsing command:', error);
+    } finally {
+      this.isWaitingForCommand = false;
+    }
+  }
+
+  private playNotificationSound() {
+    if (typeof window === 'undefined') return;
+    
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+    oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1); // Drop to A4
+    
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.start();
+    oscillator.stop(audioCtx.currentTime + 0.2);
   }
 
   private async parseCommand(text: string, confidence: number): Promise<CommandResult> {

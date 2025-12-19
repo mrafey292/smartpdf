@@ -47,9 +47,10 @@ interface TextReaderProps {
   file: File | null;
   settings: AccessibilitySettings;
   onOpenAccessibility: () => void;
+  onSettingsChange: (settings: AccessibilitySettings) => void;
 }
 
-export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settings, onOpenAccessibility }, ref) => {
+export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settings, onOpenAccessibility, onSettingsChange }, ref) => {
   const [allContent, setAllContent] = useState<StructuredContent[]>([]);
   const [pageBreaks, setPageBreaks] = useState<number[]>([]); // Indices where pages start
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -117,16 +118,38 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
           e.preventDefault();
           onOpenAccessibility();
           break;
+        case '+':
+        case '=':
+          e.preventDefault();
+          onSettingsChange({
+            ...settings,
+            fontSize: Math.min(settings.fontSize + 2, 48)
+          });
+          break;
+        case '-':
+        case '_':
+          e.preventDefault();
+          onSettingsChange({
+            ...settings,
+            fontSize: Math.max(settings.fontSize - 2, 12)
+          });
+          break;
         case '?':
           e.preventDefault();
           setShowShortcuts(prev => !prev);
+          break;
+        case 'Escape':
+          if (showShortcuts) {
+            e.preventDefault();
+            setShowShortcuts(false);
+          }
           break;
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [settings.ttsEnabled, isPlaying, isPaused, pageBreaks.length, currentPage]);
+  }, [settings, isPlaying, isPaused, pageBreaks.length, currentPage, onSettingsChange]);
 
   // Scroll listener to update current page
   useEffect(() => {
@@ -769,6 +792,25 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
                     </div>
                   </div>
                 )}
+
+                {/* Font Size */}
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-3">Font Size</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Increase font size</span>
+                      <div className="flex gap-2">
+                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>+</kbd>
+                        <span className="text-xs text-muted-foreground">or</span>
+                        <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>=</kbd>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-foreground">Decrease font size</span>
+                      <kbd className="text-xs font-semibold rounded border border-border" style={{ padding: '0.375rem 0.625rem', backgroundColor: 'var(--muted)' }}>-</kbd>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Text-to-Speech */}
                 {settings.ttsEnabled && (

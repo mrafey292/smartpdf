@@ -167,11 +167,12 @@ interface AnalysisResult {
 
 interface SummaryPanelProps {
   documentText: string;
+  cacheName?: string;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProps) {
+export function SummaryPanel({ documentText, cacheName, isOpen, onClose }: SummaryPanelProps) {
   const [summaries, setSummaries] = useState<SummaryResult[]>([]);
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -186,7 +187,8 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentText,
+          documentText: cacheName ? undefined : documentText,
+          cacheName,
           summaryType,
           simplify: false
         })
@@ -224,7 +226,8 @@ export function SummaryPanel({ documentText, isOpen, onClose }: SummaryPanelProp
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentText,
+          documentText: cacheName ? undefined : documentText,
+          cacheName,
           analysisType,
           questionCount: 10
         })
