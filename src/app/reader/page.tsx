@@ -596,6 +596,7 @@ export default function ReaderPage() {
         fileId={fileId}
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
+        documentText={documentText}
       />
       <VoiceAssistant
         onCommand={handleVoiceCommand}
