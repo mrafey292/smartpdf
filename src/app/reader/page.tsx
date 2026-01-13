@@ -53,7 +53,7 @@ export default function ReaderPage() {
   const readerRef = useRef<ReaderRef>(null);
   const [file, setFile] = useState<File | null>(null);
   const [documentText, setDocumentText] = useState<string>('');
-  const [cacheName, setCacheName] = useState<string | undefined>(undefined);
+  const [fileId, setFileId] = useState<string | undefined>(undefined);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInitialQuestion, setChatInitialQuestion] = useState<string | undefined>(undefined);
@@ -66,8 +66,8 @@ export default function ReaderPage() {
   const [isProcessingCommand, setIsProcessingCommand] = useState(false);
   const router = useRouter();
 
-  // Extract text using AI for better structure and accuracy
-  const extractTextWithAI = async (file: File) => {
+  // Ingest PDF using RAG pipeline for better structure and vector indexing
+  const ingestPdfWithRAG = async (file: File) => {
     if (isExtracting) return; // Prevent multiple simultaneous extractions
     
     try {
@@ -75,25 +75,33 @@ export default function ReaderPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/extract-text', {
+      const response = await fetch('/api/ingest', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('AI extraction failed');
+        throw new Error('RAG ingestion failed');
       }
 
       const data = await response.json();
-      // Strip page markers for the general document text used in chat/summary
-      const cleanText = data.text.replace(/\[PAGE_BREAK_\d+\]/g, '');
-      setDocumentText(cleanText);
-      setCacheName(data.cacheName);
       
-      // Save the extracted text and cache name to IndexedDB so we don't have to call the API again
-      await updateExtractedText(data.text, data.cacheName);
+      if (data.success && data.fileId && data.markdown) {
+        // Strip page markers for the general document text used in display
+        const cleanText = data.markdown.replace(/\[PAGE_BREAK_\d+\]/g, '');
+        setDocumentText(cleanText);
+        setFileId(data.fileId);
+        
+        // Save the fileId and markdown to IndexedDB
+        const { updateFileId } = await import('@/lib/storage');
+        await updateFileId(data.fileId, data.markdown);
+        
+        console.log(`✓ PDF ingested: ${data.totalChunks} chunks, fileId: ${data.fileId}`);
+      } else {
+        throw new Error('Invalid response from ingest API');
+      }
     } catch (error) {
-      console.error('Error extracting text with AI:', error);
+      console.error('Error ingesting PDF with RAG:', error);
       // Fallback to local extraction
       await extractTextFromDocumentLocal(file);
     } finally {
@@ -186,14 +194,14 @@ export default function ReaderPage() {
           const reconstructedFile = new File([blob], storedDoc.name, { type: storedDoc.type });
           setFile(reconstructedFile);
           
-          // If we already have extracted text, use it. Otherwise, call the AI.
-          if (storedDoc.extractedText) {
+          // If we already have extracted text and fileId, use them. Otherwise, call RAG ingest.
+          if (storedDoc.extractedText && storedDoc.fileId) {
             const cleanText = storedDoc.extractedText.replace(/\[PAGE_BREAK_\d+\]/g, '');
             setDocumentText(cleanText);
-            setCacheName(storedDoc.cacheName);
+            setFileId(storedDoc.fileId);
           } else {
-            // Extract text using AI
-            await extractTextWithAI(reconstructedFile);
+            // Ingest PDF using RAG pipeline
+            await ingestPdfWithRAG(reconstructedFile);
           }
           
           // Set view mode based on file type
@@ -576,8 +584,7 @@ export default function ReaderPage() {
         onSettingsChange={handleSettingsChange}
       />
       <ChatPanel
-        documentText={documentText || 'Loading document...'}
-        cacheName={cacheName}
+        fileId={fileId}
         isOpen={isChatOpen}
         onClose={() => {
           setIsChatOpen(false);
@@ -586,8 +593,7 @@ export default function ReaderPage() {
         initialQuestion={chatInitialQuestion}
       />
       <SummaryPanel
-        documentText={documentText || 'Loading document...'}
-        cacheName={cacheName}
+        fileId={fileId}
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
       />
@@ -596,7 +602,7 @@ export default function ReaderPage() {
         isEnabled={true}
       />
 
-      {/* Debug/Test Command Bar */}
+      {/* Debug/Test Command Bar - Commented out, can be added back if needed
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
         <form 
           onSubmit={handleCommandSubmit}
@@ -625,6 +631,7 @@ export default function ReaderPage() {
           </button>
         </form>
       </div>
+      */}
     </div>
   );
 }

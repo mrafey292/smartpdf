@@ -12,6 +12,7 @@ interface StoredDocument {
   uploadedAt: Date;
   extractedText?: string;
   cacheName?: string;
+  fileId?: string; // RAG pipeline file ID from Pinecone
 }
 
 /**
@@ -26,7 +27,7 @@ function openDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      
+
       // Create object store if it doesn't exist
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'id' });
@@ -41,7 +42,7 @@ function openDB(): Promise<IDBDatabase> {
 export async function storeDocument(file: File): Promise<string> {
   const db = await openDB();
   const arrayBuffer = await file.arrayBuffer();
-  
+
   const doc: StoredDocument = {
     id: 'current', // Using a fixed ID to always store the current document
     name: file.name,
@@ -57,7 +58,7 @@ export async function storeDocument(file: File): Promise<string> {
 
     request.onsuccess = () => resolve(doc.id);
     request.onerror = () => reject(request.error);
-    
+
     transaction.oncomplete = () => db.close();
   });
 }
@@ -75,7 +76,7 @@ export async function getCurrentDocument(): Promise<StoredDocument | null> {
 
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
-    
+
     transaction.oncomplete = () => db.close();
   });
 }
@@ -86,7 +87,7 @@ export async function getCurrentDocument(): Promise<StoredDocument | null> {
 export async function updateExtractedText(text: string, cacheName?: string): Promise<void> {
   const db = await openDB();
   const doc = await getCurrentDocument();
-  
+
   if (!doc) return;
 
   doc.extractedText = text;
@@ -101,7 +102,33 @@ export async function updateExtractedText(text: string, cacheName?: string): Pro
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
-    
+
+    transaction.oncomplete = () => db.close();
+  });
+}
+
+/**
+ * Update the fileId (from RAG pipeline) for the current document
+ */
+export async function updateFileId(fileId: string, markdown?: string): Promise<void> {
+  const db = await openDB();
+  const doc = await getCurrentDocument();
+
+  if (!doc) return;
+
+  doc.fileId = fileId;
+  if (markdown) {
+    doc.extractedText = markdown;
+  }
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(doc);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+
     transaction.oncomplete = () => db.close();
   });
 }
@@ -119,7 +146,7 @@ export async function deleteCurrentDocument(): Promise<void> {
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
-    
+
     transaction.oncomplete = () => db.close();
   });
 }
@@ -136,6 +163,6 @@ export async function getCurrentDocumentAsBase64(): Promise<string | null> {
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  
+
   return btoa(binary);
 }

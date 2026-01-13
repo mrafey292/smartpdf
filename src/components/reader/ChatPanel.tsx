@@ -107,14 +107,13 @@ function FormattedMessage({ text }: { text: string }) {
 }
 
 interface ChatPanelProps {
-  documentText: string;
-  cacheName?: string;
+  fileId?: string;
   isOpen: boolean;
   onClose: () => void;
   initialQuestion?: string;
 }
 
-export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQuestion }: ChatPanelProps) {
+export function ChatPanel({ fileId, isOpen, onClose, initialQuestion }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -140,6 +139,18 @@ export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQue
     const questionToSend = (textOverride || input).trim();
     if (!questionToSend || loading) return;
 
+    // Check if we have a fileId for RAG mode
+    if (!fileId) {
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        text: 'Please wait for the document to finish processing before asking questions.',
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -156,14 +167,13 @@ export function ChatPanel({ documentText, cacheName, isOpen, onClose, initialQue
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentText: cacheName ? undefined : documentText,
-          cacheName,
+          fileId,
           question: questionToSend,
           conversationHistory: messages
         })
       });
 
-      const data: ChatResponse = await response.json();
+      const data = await response.json();
 
       if (data.success && data.answer) {
         const assistantMessage: ChatMessage = {

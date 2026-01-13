@@ -166,13 +166,12 @@ interface AnalysisResult {
 }
 
 interface SummaryPanelProps {
-  documentText: string;
-  cacheName?: string;
+  fileId?: string;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function SummaryPanel({ documentText, cacheName, isOpen, onClose }: SummaryPanelProps) {
+export function SummaryPanel({ fileId, isOpen, onClose }: SummaryPanelProps) {
   const [summaries, setSummaries] = useState<SummaryResult[]>([]);
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -182,37 +181,33 @@ export function SummaryPanel({ documentText, cacheName, isOpen, onClose }: Summa
 
   // Auto-generate summary when panel is opened for the first time
   useEffect(() => {
-    if (isOpen && summaries.length === 0 && !loading && documentText) {
-      generateSummary();
-    }
-  }, [isOpen, summaries.length, documentText]);
+    // Disabled for now - will be reimplemented with RAG-based summarization
+    // if (isOpen && summaries.length === 0 && !loading && fileId) {
+    //   generateSummary();
+    // }
+  }, [isOpen, summaries.length, fileId]);
 
   const generateSummary = async () => {
+    if (!fileId) {
+      const errorSummary: SummaryResult = {
+        type: summaryType,
+        content: 'Please wait for the document to finish processing before generating summaries.',
+        timestamp: Date.now()
+      };
+      setSummaries(prev => [errorSummary, ...prev]);
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch('/api/summarize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentText: cacheName ? undefined : documentText,
-          cacheName,
-          summaryType,
-          simplify: false
-        })
-      });
-
-      const data: SummaryResponse = await response.json();
-
-      if (data.success && data.summary) {
-        const newSummary: SummaryResult = {
-          type: summaryType,
-          content: data.summary,
-          timestamp: Date.now()
-        };
-        setSummaries(prev => [newSummary, ...prev]);
-      } else {
-        throw new Error(data.error || 'Failed to generate summary');
-      }
+      // TODO: Implement RAG-based summarization
+      // For now, show a message that this feature is being migrated
+      const placeholderSummary: SummaryResult = {
+        type: summaryType,
+        content: '**Summary feature is being migrated to RAG pipeline.**\n\nThis feature will be available soon with improved accuracy using vector search and retrieval-augmented generation.',
+        timestamp: Date.now()
+      };
+      setSummaries(prev => [placeholderSummary, ...prev]);
     } catch (error) {
       console.error('Summary error:', error);
       const errorSummary: SummaryResult = {
@@ -227,31 +222,25 @@ export function SummaryPanel({ documentText, cacheName, isOpen, onClose }: Summa
   };
 
   const generateAnalysis = async () => {
+    if (!fileId) {
+      const errorAnalysis: AnalysisResult = {
+        type: analysisType,
+        content: 'Please wait for the document to finish processing before analyzing.',
+        timestamp: Date.now()
+      };
+      setAnalyses(prev => [errorAnalysis, ...prev]);
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch('/api/analyze-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentText: cacheName ? undefined : documentText,
-          cacheName,
-          analysisType,
-          questionCount: 10
-        })
-      });
-
-      const data: AnalysisResponse = await response.json();
-
-      if (data.success && data.result) {
-        const newAnalysis: AnalysisResult = {
-          type: analysisType,
-          content: data.result,
-          timestamp: Date.now()
-        };
-        setAnalyses(prev => [newAnalysis, ...prev]);
-      } else {
-        throw new Error(data.error || 'Failed to analyze document');
-      }
+      // TODO: Implement RAG-based analysis
+      const placeholderAnalysis: AnalysisResult = {
+        type: analysisType,
+        content: '**Analysis feature is being migrated to RAG pipeline.**\n\nThis feature will be available soon with improved insights using vector search.',
+        timestamp: Date.now()
+      };
+      setAnalyses(prev => [placeholderAnalysis, ...prev]);
     } catch (error) {
       console.error('Analysis error:', error);
       const errorAnalysis: AnalysisResult = {

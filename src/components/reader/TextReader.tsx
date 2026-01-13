@@ -182,6 +182,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
       setLoading(true);
       try {
         // Check if we already have extracted text in IndexedDB
+        // This should ALWAYS be populated by reader/page.tsx before this component loads
         const storedDoc = await getCurrentDocument();
         if (storedDoc?.extractedText) {
           const markdown = storedDoc.extractedText;
@@ -191,26 +192,9 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
           return;
         }
 
-        // Try AI extraction first
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const aiResponse = await fetch('/api/extract-text', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (aiResponse.ok) {
-          const data = await aiResponse.json();
-          const markdown = data.text;
-          parseAndSetContent(markdown);
-          setExtractionMode('ai');
-          setLoading(false);
-          return; // Success!
-        }
-
-        // Fallback to local extraction if AI fails
-        console.warn('AI extraction failed, falling back to local extraction');
+        // Fallback to local extraction if no cached text exists
+        // This should rarely happen since page.tsx handles AI extraction
+        console.warn('No cached text found, falling back to local extraction');
         setExtractionMode('local');
         
         if (file.type === 'application/pdf') {
@@ -318,8 +302,13 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
     };
 
     const parseAndSetContent = (markdown: string) => {
+      // Remove markdown image syntax before parsing
+      const cleanedMarkdown = markdown
+        .replace(/!\[.*?\]\(.*?\)/g, '') // Remove ![alt](url) image syntax
+        .replace(/!\[.*?\]\[.*?\]/g, ''); // Remove ![alt][ref] reference-style images
+      
       // Parse Markdown into StructuredContent
-      const lines = markdown.split('\n');
+      const lines = cleanedMarkdown.split('\n');
       const structured: StructuredContent[] = [];
       const breaks: number[] = [0];
       let currentParagraph = '';
@@ -860,6 +849,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
             {/* Page Navigation - Only show for PDFs with multiple pages */}
             {pageBreaks.length > 1 && (
               <div className="flex items-center gap-2">
+                {/* Commented out arrow buttons - can be added back if needed
                 <button
                   onClick={goToPrevPage}
                   disabled={currentPage <= 1}
@@ -869,9 +859,11 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
                 >
                   ←
                 </button>
+                */}
                 <span className="text-sm font-medium text-foreground">
                   Page {currentPage} of {pageBreaks.length}
                 </span>
+                {/* Commented out arrow buttons - can be added back if needed
                 <button
                   onClick={goToNextPage}
                   disabled={currentPage >= pageBreaks.length}
@@ -881,6 +873,7 @@ export const TextReader = forwardRef<ReaderRef, TextReaderProps>(({ file, settin
                 >
                   →
                 </button>
+                */}
               </div>
             )}
 

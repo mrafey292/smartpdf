@@ -66,7 +66,7 @@ export async function getModelWithCaching(text: string, cacheName?: string) {
     try {
       const manager = getCacheManager();
       const cache = await manager.create({
-        model: 'models/gemini-1.5-flash-001', // Use 1.5 Flash for caching support
+        model: 'models/gemini-2.5-flash-lite', // Use 1.5 Flash for caching support
         displayName: 'document-context',
         contents: [
           {
@@ -76,7 +76,7 @@ export async function getModelWithCaching(text: string, cacheName?: string) {
         ],
         ttlSeconds: 3600, // 1 hour cache
       });
-      
+
       return {
         model: getGenAI().getGenerativeModelFromCachedContent(cache),
         cacheName: cache.name
@@ -123,7 +123,7 @@ export async function createDocumentCache(text: string) {
     try {
       const manager = getCacheManager();
       const cache = await manager.create({
-        model: 'models/gemini-1.5-flash-001',
+        model: 'models/gemini-2.5-flash-lite',
         displayName: 'document-context',
         contents: [
           {
@@ -168,7 +168,7 @@ export async function chatWithDocument(
       model = getGeminiModel();
       prompt = `You are an AI assistant helping users understand a document. Here is the document content:\n\n${documentText}\n\nUser question: ${question}`;
     }
-    
+
     // Add history if present
     if (conversationHistory.length > 0) {
       let historyText = "\nPrevious conversation:\n";
@@ -207,7 +207,7 @@ export async function summarizeDocument(
       model = getGeminiProModel();
       promptPrefix = `Document content:\n\n${documentText}\n\n`;
     }
-    
+
     let prompt = '';
     switch (summaryType) {
       case 'brief':
@@ -260,7 +260,7 @@ export async function extractKeyConcepts(documentText: string, cacheName?: strin
 export async function extractStructuredText(fileBase64: string, mimeType: string) {
   return withRetry(async () => {
     const model = getGeminiProModel();
-    
+
     const prompt = `
       You are an expert document parser. Your task is to extract all text from the provided document and format it in clean, structured Markdown.
       
@@ -298,7 +298,7 @@ export async function extractStructuredText(fileBase64: string, mimeType: string
 export async function explainAccessibility(documentText: string, feature: string) {
   return withRetry(async () => {
     const model = getGeminiModel();
-    
+
     const prompt = `Based on this document, explain how it relates to or discusses "${feature}" in simple, accessible language:\n\n${documentText}`;
 
     const result = await model.generateContent(prompt);
@@ -340,13 +340,13 @@ export async function generateStudyQuestions(documentText: string, count: number
 export async function simplifyText(text: string, readingLevel: 'elementary' | 'middle-school' | 'high-school' = 'high-school') {
   return withRetry(async () => {
     const model = getGeminiModel();
-    
+
     const levelDescriptions = {
       'elementary': 'elementary school (grades 1-5)',
       'middle-school': 'middle school (grades 6-8)',
       'high-school': 'high school (grades 9-12)'
     };
-    
+
     const prompt = `Rewrite the following text to be understandable at a ${levelDescriptions[readingLevel]} reading level. Keep the main ideas but use simpler words and shorter sentences:\n\n${text}`;
 
     const result = await model.generateContent(prompt);
@@ -361,13 +361,13 @@ export async function simplifyText(text: string, readingLevel: 'elementary' | 'm
 export async function parseVoiceCommand(text: string) {
   return withRetry(async () => {
     // Use JSON mode to ensure valid JSON output
-    const model = getGenAI().getGenerativeModel({ 
+    const model = getGenAI().getGenerativeModel({
       model: 'gemini-2.5-flash-lite',
       generationConfig: {
         responseMimeType: "application/json",
       }
     });
-    
+
     const systemPrompt = `
 You are a voice command parser for a smart document reader application.
 Your task is to map the user's spoken input to one of the predefined commands.
@@ -401,12 +401,12 @@ Output Format (JSON):
 
     const response = await result.response;
     let jsonString = response.text().trim();
-    
+
     // Robust cleaning for JSON mode
     if (jsonString.includes('```')) {
       jsonString = jsonString.replace(/```json\n?|\n?```/g, '').trim();
     }
-    
+
     try {
       return JSON.parse(jsonString);
     } catch (e) {

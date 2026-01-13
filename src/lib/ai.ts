@@ -31,8 +31,8 @@ export const aiService = {
       throw new Error('Gemini API key not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
     const prompt = `Please provide a clear and concise summary of the following ${type}. 
     Keep it accessible and easy to understand:
 
@@ -51,8 +51,8 @@ export const aiService = {
       throw new Error('Gemini API key not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
     const prompt = `Please rewrite the following text in simpler, more accessible language. 
     Use shorter sentences and common words while maintaining the original meaning:
 
@@ -71,8 +71,8 @@ export const aiService = {
       throw new Error('Gemini API key not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+
     const prompt = `Based on the following context, please answer the question clearly and concisely:
 
     Context: ${context}
@@ -94,8 +94,8 @@ export const aiService = {
       throw new Error('Gemini API key not configured');
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
-    
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite-vision' });
+
     const prompt = 'Provide a clear, concise description of this image for accessibility purposes.';
 
     const result = await model.generateContent([prompt, { inlineData: { data: imageData, mimeType: 'image/jpeg' } }]);
